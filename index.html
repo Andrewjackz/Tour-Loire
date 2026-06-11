@@ -71,13 +71,22 @@
 
   /* Map */
   #map{position:absolute;inset:0}
-  .map-overlay{position:absolute;left:12px;right:12px;bottom:12px;z-index:500;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
+  .map-overlay{position:absolute;left:12px;right:64px;bottom:12px;z-index:500;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
   .map-overlay > *{pointer-events:auto}
   .chip{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:13px;font-weight:600;
     box-shadow:var(--shadow);display:inline-flex;align-items:center;gap:7px;cursor:pointer;color:var(--navy)}
   .chip:active{transform:translateY(1px)}
   .chip.alt{background:var(--navy);color:#fff;border-color:var(--navy)}
   .chip.rec{background:var(--claret);color:#fff;border-color:var(--claret)}
+  /* Floating settings gear (above the zoom control, bottom-right) */
+  .gear{position:absolute;right:12px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:600;
+    width:42px;height:42px;border-radius:11px;border:1px solid var(--line);background:var(--paper);
+    box-shadow:var(--shadow);font-size:19px;cursor:pointer;display:grid;place-items:center;padding:0}
+  .gear:active{transform:translateY(1px)}
+  /* Push Leaflet zoom up off the home indicator and style it */
+  .leaflet-bottom.leaflet-right{margin-bottom:calc(12px + env(safe-area-inset-bottom));margin-right:12px}
+  .leaflet-control-zoom{border:1px solid var(--line)!important;box-shadow:var(--shadow)!important;border-radius:11px!important;overflow:hidden}
+  .leaflet-control-zoom a{color:var(--navy)!important}
   .map-stat{position:absolute;top:58px;left:12px;z-index:500;background:rgba(255,255,255,.94);border:1px solid var(--line);
     border-radius:12px;box-shadow:var(--shadow);padding:9px 12px;font-size:12px;max-width:62%}
   .map-stat b{font-family:'Fraunces',serif;font-size:15px;color:var(--navy)}
@@ -99,6 +108,21 @@
   .day-pill.on{background:var(--navy);border-color:var(--navy)}
   .day-pill.on .dw{color:#C9D2E6}
   .day-pill.on .dn{color:#fff}
+  /* In-flow variant used inside the run-through panel */
+  .day-strip.rt-strip{position:static;background:none;padding:0 0 12px}
+
+  /* Settings modal */
+  .modal{position:fixed;inset:0;z-index:2000;background:rgba(27,42,74,.32);display:none;align-items:flex-end;justify-content:center}
+  .modal.show{display:flex}
+  .sheet{background:var(--cream);width:100%;max-width:560px;max-height:88vh;border-radius:18px 18px 0 0;
+    box-shadow:0 -8px 30px rgba(27,42,74,.25);display:flex;flex-direction:column;animation:rise .22s ease}
+  @keyframes rise{from{transform:translateY(24px);opacity:.6}to{transform:translateY(0);opacity:1}}
+  .sheet-hd{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid var(--line);
+    font-family:'Fraunces',serif;font-size:17px;color:var(--navy)}
+  .sheet-bd{padding:16px;overflow:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+  .icon-btn{border:1px solid var(--line);background:var(--paper);width:32px;height:32px;border-radius:9px;
+    font-size:14px;cursor:pointer;color:var(--navy)}
+  @media(min-width:560px){.modal{align-items:center}.sheet{border-radius:18px}}
 
   /* Buttons */
   button{font-family:inherit}
@@ -237,9 +261,10 @@
       <div class="map-overlay">
         <button class="chip" id="locBtn">📍 Start tracking</button>
         <button class="chip" id="recBtn">⏺ Record ride</button>
-        <button class="chip" id="nearBtn">🧭 Nearby</button>
+        <button class="chip" id="nearBtn">👁 Attractions</button>
         <button class="chip" id="fitBtn">🗺 Fit route</button>
       </div>
+      <button class="gear" id="gearBtn" title="Settings">⚙️</button>
     </section>
 
     <!-- LEGS -->
@@ -266,8 +291,9 @@
         <div class="eyebrow">Virtual ride</div>
         <h2 style="margin:4px 0 8px">Run-through</h2>
         <p class="hint" style="margin-top:0">Play a leg from your armchair, scrub to any point, and pull the
-          areas of interest around that exact spot. Pick the leg on the <b>Legs</b> tab, then come back here.</p>
+          attractions around that exact spot. Pick a day below.</p>
 
+        <div id="rtDayStrip" class="day-strip rt-strip"></div>
         <div id="rtmap" style="height:300px;border-radius:var(--r);border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden;margin-bottom:12px"></div>
 
         <div class="card"><div class="bd">
@@ -283,7 +309,7 @@
           <input type="range" id="rtSlider" min="0" max="1000" value="0" />
           <div class="rt-bar" style="margin-top:8px;font-size:12px;color:var(--muted)">
             <span id="rtProg">0.0 km mapped</span>
-            <button class="btn sm red" id="rtPoi" style="margin-left:auto">🧭 Interest here</button>
+            <button class="btn sm red" id="rtPoi" style="margin-left:auto">👁 Attractions here</button>
           </div>
         </div></div>
 
@@ -352,48 +378,7 @@
 
         <div class="card"><div class="hd"><span>🍷</span><b>Tastings &amp; meals</b></div><div class="bd" id="diningList"></div></div>
 
-        <div class="card"><div class="hd"><span>⚙️</span><b>Settings</b></div><div class="bd">
-          <div class="field">
-            <label class="fld" for="apiKey">Anthropic API key (optional — for “Ask the guide”)</label>
-            <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
-            <div class="hint">Stored only in this browser’s local storage. Used solely for guide narration.
-              Calling Anthropic from a browser exposes the key to anyone who can read this page’s storage on the device — fine for your own phone/PC, don’t deploy it on a shared machine.</div>
-          </div>
-          <div class="field">
-            <label class="fld" for="model">Guide model</label>
-            <select id="model">
-              <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fast, cheap — default)</option>
-              <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-              <option value="claude-opus-4-8">Claude Opus 4.8</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="fld" for="radius">Nearby search radius</label>
-            <select id="radius">
-              <option value="1500">1.5 km</option>
-              <option value="3000" selected>3 km</option>
-              <option value="5000">5 km</option>
-              <option value="8000">8 km</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="fld" for="profile">Cycle routing profile (BRouter)</label>
-            <select id="profile">
-              <option value="trekking" selected>Trekking — prefers cycle paths (Loire à Vélo)</option>
-              <option value="fastbike">Fast bike — quicker roads</option>
-              <option value="shortest">Shortest</option>
-            </select>
-            <div class="hint">Routes follow OpenStreetMap cycleways where they exist. If a leg shows a dashed
-              straight line, the router was unreachable — tap a leg again to retry.</div>
-          </div>
-          <div class="field">
-            <label class="fld" for="gpxFile">Import official GPX (overrides routing for one leg)</label>
-            <select id="gpxLeg" style="margin-bottom:8px"></select>
-            <input type="file" id="gpxFile" accept=".gpx,application/gpx+xml">
-            <div class="hint">If the Discover France road-book includes GPX tracks, import them here for exact lines.
-              Pick the leg, then choose the file.</div>
-          </div>
-        </div></div>
+        <button class="btn ghost block" onclick="openSettings()" style="margin-top:4px">⚙️ Open settings</button>
 
         <div class="note" style="margin-top:14px">
           <b>Read me / accuracy.</b> Position tracking needs location permission and works best on the iPhone in the
@@ -416,6 +401,59 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal" id="settingsModal">
+  <div class="sheet">
+    <div class="sheet-hd">
+      <b>Settings</b>
+      <button class="icon-btn" onclick="closeSettings()" aria-label="Close">✕</button>
+    </div>
+    <div class="sheet-bd">
+      <div class="field">
+        <label class="fld" for="apiKey">Anthropic API key (optional — for “Ask the guide”)</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+        <div class="hint">Stored only in this browser’s local storage and used solely for guide narration.
+          Calling Anthropic from a browser exposes the key to anyone who can read this device’s storage — fine for your own phone/PC, not a shared machine.</div>
+      </div>
+      <div class="field">
+        <label class="fld" for="model">Guide model</label>
+        <select id="model">
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fast, cheap — default)</option>
+          <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+          <option value="claude-opus-4-8">Claude Opus 4.8</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="fld" for="radius">Attraction search radius</label>
+        <select id="radius">
+          <option value="1500">1.5 km</option>
+          <option value="3000" selected>3 km</option>
+          <option value="5000">5 km</option>
+          <option value="8000">8 km</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="fld" for="profile">Cycle routing profile (BRouter)</label>
+        <select id="profile">
+          <option value="trekking" selected>Trekking — prefers cycle paths (Loire à Vélo)</option>
+          <option value="fastbike">Fast bike — quicker roads</option>
+          <option value="shortest">Shortest</option>
+        </select>
+        <div class="hint">Routes follow OpenStreetMap cycleways where they exist. A dashed straight line means
+          the router was unreachable — re-select that day to retry.</div>
+      </div>
+      <div class="field">
+        <label class="fld" for="gpxFile">Import official GPX (overrides routing for one leg)</label>
+        <select id="gpxLeg" style="margin-bottom:8px"></select>
+        <input type="file" id="gpxFile" accept=".gpx,application/gpx+xml">
+        <div class="hint">If the Discover France road-book includes GPX tracks, import them here for exact lines.
+          Pick the leg, then choose the file.</div>
+      </div>
+      <button class="btn block" onclick="closeSettings()" style="margin-top:6px">Done</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -550,7 +588,8 @@ const routeLines={}; // legId -> polyline
 const cumCache={};   // legId -> cumulative distance array (m)
 
 function initMap(){
-  map=L.map('map',{zoomControl:true,attributionControl:true}).setView(P.tours,10);
+  map=L.map('map',{zoomControl:false,attributionControl:true}).setView(P.tours,10);
+  L.control.zoom({position:'bottomright'}).addTo(map);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19, attribution:'© OpenStreetMap'
   }).addTo(map);
@@ -707,23 +746,28 @@ function updateMapStat(){
   row.innerHTML=`<span>Planned <b>${planned}</b></span><span>Mapped <b>${mapped}</b></span><span>Ridden <b>${act}</b></span>`;
 }
 
-/* ---------- Day quick-toggle strip ---------- */
+/* ---------- Day quick-toggle strips (map + run-through) ---------- */
+const STRIP_IDS=['dayStrip','rtDayStrip'];
 function renderDayStrip(){
-  const host=document.getElementById('dayStrip'); if(!host) return;
-  host.innerHTML=TRIP.legs.map(leg=>{
-    const done=!!state.legActual[leg.id];
-    return `<div class="day-pill${leg.id===state.selLeg?' on':''}${done?' done':''}" data-id="${leg.id}">
-      <div class="dw">${leg.dow}</div><div class="dn">${leg.day}</div></div>`;
-  }).join('');
-  host.querySelectorAll('.day-pill').forEach(el=>el.onclick=()=>selectLeg(+el.dataset.id));
+  STRIP_IDS.forEach(hid=>{
+    const host=document.getElementById(hid); if(!host) return;
+    host.innerHTML=TRIP.legs.map(leg=>{
+      const done=!!state.legActual[leg.id];
+      return `<div class="day-pill${leg.id===state.selLeg?' on':''}${done?' done':''}" data-id="${leg.id}">
+        <div class="dw">${leg.dow}</div><div class="dn">${leg.day}</div></div>`;
+    }).join('');
+    host.querySelectorAll('.day-pill').forEach(el=>el.onclick=()=>selectLeg(+el.dataset.id));
+  });
 }
 function syncDayStrip(){
-  const host=document.getElementById('dayStrip'); if(!host) return;
-  host.querySelectorAll('.day-pill').forEach(el=>{
-    const on=+el.dataset.id===state.selLeg;
-    el.classList.toggle('on',on);
-    el.classList.toggle('done',!!state.legActual[+el.dataset.id]);
-    if(on) el.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+  STRIP_IDS.forEach(hid=>{
+    const host=document.getElementById(hid); if(!host) return;
+    host.querySelectorAll('.day-pill').forEach(el=>{
+      const on=+el.dataset.id===state.selLeg;
+      el.classList.toggle('on',on);
+      el.classList.toggle('done',!!state.legActual[+el.dataset.id]);
+      if(on) el.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+    });
   });
 }
 
@@ -1173,6 +1217,10 @@ function showTab(name){
   if(name==='run'){ renderRtLeg(); }
 }
 
+/* ---------- Settings modal ---------- */
+function openSettings(){ document.getElementById('settingsModal').classList.add('show'); }
+function closeSettings(){ document.getElementById('settingsModal').classList.remove('show'); }
+
 /* ---------- Toast ---------- */
 let toastT;
 function toast(msg){
@@ -1186,6 +1234,8 @@ function bind(){
   document.getElementById('locBtn').onclick=startTracking;
   document.getElementById('recBtn').onclick=toggleRecord;
   document.getElementById('nearBtn').onclick=nearbyHere;
+  document.getElementById('gearBtn').onclick=openSettings;
+  document.getElementById('settingsModal').addEventListener('click',e=>{ if(e.target.id==='settingsModal') closeSettings(); });
   document.getElementById('fitBtn').onclick=()=>{
     const ln=routeLines[state.selLeg];
     if(ln){try{map.fitBounds(ln.getBounds().pad(.18))}catch(e){}}
