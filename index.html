@@ -125,6 +125,17 @@
   @media(min-width:560px){.modal{align-items:center}.sheet{border-radius:18px}}
   .ver{text-align:center;font-size:11.5px;color:var(--muted);margin-top:14px;letter-spacing:.02em}
   .ver b{color:var(--navy);font-weight:700}
+  /* Highlights numbered markers + rows */
+  .hl-num{width:24px;height:24px;border-radius:50%;background:var(--navy);color:#fff;border:2px solid #fff;
+    box-shadow:0 1px 4px rgba(0,0,0,.3);display:grid;place-items:center;font-size:12px;font-weight:700;font-family:'Inter',sans-serif}
+  .hl-num.cur{background:var(--claret)}
+  .hl-row{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line-2);cursor:pointer}
+  .hl-row:first-child{border-top:0}
+  .hl-row .bdg{width:26px;height:26px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--navy)}
+  .hl-row .bdg.cur{background:var(--claret)}
+  .hl-row .nm{font-size:14px;font-weight:600;line-height:1.2}
+  .hl-row .mt{font-size:12px;color:var(--muted);margin-top:1px}
+  .hl-row .km{font-size:12px;font-weight:700;color:var(--navy);white-space:nowrap;margin-left:auto}
 
   /* Buttons */
   button{font-family:inherit}
@@ -263,6 +274,7 @@
       <div class="map-overlay">
         <button class="chip" id="locBtn">📍 Start tracking</button>
         <button class="chip" id="recBtn">⏺ Record ride</button>
+        <button class="chip" id="hlBtn">🏰 Highlights</button>
         <button class="chip" id="nearBtn">👁 Attractions</button>
         <button class="chip" id="fitBtn">🗺 Fit route</button>
       </div>
@@ -404,6 +416,20 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- HIGHLIGHTS MODAL -->
+<div class="modal" id="hlModal">
+  <div class="sheet">
+    <div class="sheet-hd">
+      <b id="hlTitle">Core attractions</b>
+      <button class="icon-btn" onclick="closeHighlights()" aria-label="Close">✕</button>
+    </div>
+    <div class="sheet-bd">
+      <div class="hint" id="hlSub" style="margin-top:0;margin-bottom:10px"></div>
+      <div id="hlList"></div>
+    </div>
+  </div>
+</div>
+
 <!-- SETTINGS MODAL -->
 <div class="modal" id="settingsModal">
   <div class="sheet">
@@ -467,8 +493,8 @@
    ============================================================ */
 
 /* Build stamp — bump on every edit. */
-const APP_VERSION = '1.0.0';
-const APP_BUILD   = '2026-06-10 23:10';   // local build time
+const APP_VERSION = '1.1.0';
+const APP_BUILD   = '2026-06-10 23:30';   // local build time
 
 /* ---------- Coordinates [lat, lon] ---------- */
 const P = {
@@ -590,7 +616,7 @@ let state={
 };
 
 /* ---------- Map ---------- */
-let map, meMarker, meAccCircle, nearLayer, routeLayer, poiLayer, vMarker, designated=null;
+let map, meMarker, meAccCircle, nearLayer, routeLayer, poiLayer, vMarker, designated=null, hlLayer;
 const routeLines={}; // legId -> polyline
 const cumCache={};   // legId -> cumulative distance array (m)
 
@@ -603,6 +629,7 @@ function initMap(){
   routeLayer=L.layerGroup().addTo(map);
   poiLayer=L.layerGroup().addTo(map);
   nearLayer=L.layerGroup().addTo(map);
+  hlLayer=L.layerGroup().addTo(map);
 
   // start/finish + château markers for whole trip
   TRIP.legs.forEach(leg=>{
@@ -1031,6 +1058,103 @@ async function nearbyHere(){
   await nearbyAt(center, document.getElementById('rtPoiList'));
 }
 
+/* ---------- Core attractions along today's route ---------- */
+function openHighlights(){
+  const leg=TRIP.legs[state.selLeg];
+  document.getElementById('hlTitle').textContent='Core attractions · Day '+leg.day;
+  document.getElementById('hlSub').textContent=leg.start.name+' → '+leg.finish.name+' · in riding order';
+  document.getElementById('hlModal').classList.add('show');
+  const list=document.getElementById('hlList');
+  // start with curated road-book highlights immediately
+  let items=curatedHighlights(leg);
+  renderHighlights(items, true);
+  // then scan the route corridor and merge (if there's a real route)
+  const coords=state.routes[leg.id]|| (routeLines[leg.id]?routeLines[leg.id].getLatLngs().map(p=>[p.lat,p.lng]):null);
+  if(coords && coords.length>2){
+    list.insertAdjacentHTML('beforeend','<div class="hint" id="hlScan" style="margin-top:10px"><span class="spin dark"></span> Scanning the route corridor…</div>');
+    corridorScan(leg, coords).then(extra=>{
+      const merged=mergeHighlights(items, extra, coords);
+      renderHighlights(merged, false);
+    }).catch(()=>{ const s=document.getElementById('hlScan'); if(s) s.textContent='Couldn’t scan the corridor just now — showing road-book highlights only.'; });
+  }
+}
+function closeHighlights(){ document.getElementById('hlModal').classList.remove('show'); }
+
+function curatedHighlights(leg){
+  const coords=state.routes[leg.id]|| (routeLines[leg.id]?routeLines[leg.id].getLatLngs().map(p=>[p.lat,p.lng]):null);
+  return leg.pois.map(([nm,p,ic])=>{
+    let along=0,off=0;
+    if(coords && cumCache[leg.id]){ const s=snap(coords,cumCache[leg.id],p); along=s.along; off=s.d; }
+    return {name:nm, lat:p[0], lon:p[1], icon:ic, curated:true, along, off};
+  }).sort((a,b)=>a.along-b.along);
+}
+async function corridorScan(leg, coords){
+  const cum=cumCache[leg.id]; const total=cum[cum.length-1];
+  const step=Math.max(2200, total/9);
+  const samples=[]; for(let d=0; d<=total; d+=step){
+    let i=1; while(i<cum.length && cum[i]<d) i++;
+    const p0=coords[i-1],p1=coords[Math.min(i,coords.length-1)];
+    const seg=(cum[i]-cum[i-1])||1, f=(d-cum[i-1])/seg;
+    samples.push([p0[0]+(p1[0]-p0[0])*f, p0[1]+(p1[1]-p0[1])*f]);
+  }
+  const r=700;
+  const clauses=samples.map(([la,lo])=>`
+    node(around:${r},${la},${lo})[historic~"castle|monument|ruins|fort|manor|abbey|memorial|archaeological_site"];
+    way(around:${r},${la},${lo})[historic~"castle|monument|ruins|fort|manor|abbey"];
+    node(around:${r},${la},${lo})[tourism~"attraction|viewpoint|museum"];
+    way(around:${r},${la},${lo})[tourism~"attraction|viewpoint|museum"];
+    node(around:${r},${la},${lo})[craft="winery"];
+    node(around:${r},${la},${lo})[amenity="winery"];`).join('');
+  const q=`[out:json][timeout:25];(${clauses});out center 150;`;
+  const res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q)});
+  if(!res.ok) throw new Error('overpass');
+  const d=await res.json();
+  const out=[];
+  (d.elements||[]).forEach(el=>{
+    const lat=el.lat??el.center?.lat, lon=el.lon??el.center?.lon; if(lat==null) return;
+    const tg=el.tags||{}; const name=tg.name||tg['name:en']||tg['name:fr']; if(!name) return;
+    const s=snap(coords,cum,[lat,lon]);
+    if(s.d>1200) return; // keep only what's genuinely along the route
+    const typ=(tg.historic||tg.tourism||tg.craft||tg.amenity||'place');
+    out.push({name,lat,lon,icon:POI_ICON(typ),typ,along:s.along,off:s.d,curated:false});
+  });
+  return out;
+}
+function mergeHighlights(curated, extra, coords){
+  const all=[...curated];
+  const names=curated.map(c=>c.name.toLowerCase());
+  extra.forEach(e=>{
+    const low=e.name.toLowerCase();
+    const dup=names.some(n=>n.includes(low)||low.includes(n));
+    if(!dup) all.push(e);
+  });
+  // de-dupe extras among themselves by name+loc
+  const seen=new Set();
+  const uniq=all.filter(i=>{const k=i.name.toLowerCase()+Math.round(i.lat*800)+Math.round(i.lon*800);if(seen.has(k))return false;seen.add(k);return true;});
+  return uniq.sort((a,b)=>a.along-b.along);
+}
+function renderHighlights(items, partial){
+  const list=document.getElementById('hlList');
+  hlLayer.clearLayers();
+  if(!items.length){ list.innerHTML='<div class="empty"><div class="big">🗺</div>No tagged highlights for this leg yet.</div>'; return; }
+  list.innerHTML=items.map((i,idx)=>`
+    <div class="hl-row" data-i="${idx}">
+      <div class="bdg${i.curated?' cur':''}">${idx+1}</div>
+      <div style="min-width:0"><div class="nm">${i.icon||'📍'} ${i.name}</div>
+        <div class="mt">${i.curated?'Road-book highlight':prettyType(i.typ||'place')}${i.off>120?' · '+Math.round(i.off)+' m off route':''}</div></div>
+      <div class="km">${i.along?fmtDist(i.along,1):''}</div>
+    </div>`).join('') + (partial?'<div class="hint" id="hlScan" style="margin-top:10px"><span class="spin dark"></span> Scanning the route corridor…</div>':'');
+  // numbered markers in riding order
+  items.forEach((i,idx)=>{
+    L.marker([i.lat,i.lon],{icon:L.divIcon({className:'',html:`<div class="hl-num${i.curated?' cur':''}">${idx+1}</div>`,iconSize:[24,24],iconAnchor:[12,12]}),zIndexOffset:500})
+      .bindPopup(`<b>${i.name}</b><br>${i.curated?'Road-book highlight':prettyType(i.typ||'place')} · ${i.along?fmtDist(i.along,1)+' in':''}`).addTo(hlLayer);
+  });
+  list.querySelectorAll('.hl-row').forEach(el=>el.onclick=()=>{
+    const i=items[+el.dataset.i]; closeHighlights(); showTab('map'); map.setView([i.lat,i.lon],15);
+    L.popup().setLatLng([i.lat,i.lon]).setContent(`<b>${i.name}</b><br>${i.curated?'Road-book highlight':prettyType(i.typ||'place')}`).openOn(map);
+  });
+}
+
 /* ---------- Designated point (map click / run-through) ---------- */
 function setDesignated(latlng){
   designated=latlng;
@@ -1241,6 +1365,8 @@ function bind(){
   document.getElementById('locBtn').onclick=startTracking;
   document.getElementById('recBtn').onclick=toggleRecord;
   document.getElementById('nearBtn').onclick=nearbyHere;
+  document.getElementById('hlBtn').onclick=openHighlights;
+  document.getElementById('hlModal').addEventListener('click',e=>{ if(e.target.id==='hlModal') closeHighlights(); });
   document.getElementById('gearBtn').onclick=openSettings;
   document.getElementById('settingsModal').addEventListener('click',e=>{ if(e.target.id==='settingsModal') closeSettings(); });
   document.getElementById('fitBtn').onclick=()=>{
