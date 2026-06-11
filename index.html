@@ -71,7 +71,7 @@
 
   /* Map */
   #map{position:absolute;inset:0}
-  .map-overlay{position:absolute;left:12px;right:64px;bottom:12px;z-index:500;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
+  .map-overlay{position:absolute;left:12px;right:108px;bottom:12px;z-index:500;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
   .map-overlay > *{pointer-events:auto}
   .chip{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:13px;font-weight:600;
     box-shadow:var(--shadow);display:inline-flex;align-items:center;gap:7px;cursor:pointer;color:var(--navy)}
@@ -79,7 +79,7 @@
   .chip.alt{background:var(--navy);color:#fff;border-color:var(--navy)}
   .chip.rec{background:var(--claret);color:#fff;border-color:var(--claret)}
   /* Floating settings gear (above the zoom control, bottom-right) */
-  .gear{position:absolute;right:12px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:600;
+  .gear{position:absolute;right:56px;bottom:calc(21px + env(safe-area-inset-bottom));z-index:600;
     width:42px;height:42px;border-radius:11px;border:1px solid var(--line);background:var(--paper);
     box-shadow:var(--shadow);font-size:19px;cursor:pointer;display:grid;place-items:center;padding:0}
   .gear:active{transform:translateY(1px)}
