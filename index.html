@@ -78,11 +78,27 @@
   .chip:active{transform:translateY(1px)}
   .chip.alt{background:var(--navy);color:#fff;border-color:var(--navy)}
   .chip.rec{background:var(--claret);color:#fff;border-color:var(--claret)}
-  .map-stat{position:absolute;top:12px;left:12px;z-index:500;background:rgba(255,255,255,.94);border:1px solid var(--line);
+  .map-stat{position:absolute;top:58px;left:12px;z-index:500;background:rgba(255,255,255,.94);border:1px solid var(--line);
     border-radius:12px;box-shadow:var(--shadow);padding:9px 12px;font-size:12px;max-width:62%}
   .map-stat b{font-family:'Fraunces',serif;font-size:15px;color:var(--navy)}
   .map-stat .row{display:flex;gap:14px;margin-top:3px;color:var(--muted)}
   .map-stat .row span b{font-size:13px}
+
+  /* Day quick-toggle strip (Map tab) */
+  .day-strip{position:absolute;top:0;left:0;right:0;z-index:600;display:flex;gap:7px;overflow-x:auto;
+    padding:9px 12px 16px;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+    background:linear-gradient(180deg,rgba(247,244,236,.97) 30%,rgba(247,244,236,0))}
+  .day-strip::-webkit-scrollbar{display:none}
+  .day-pill{flex:0 0 auto;background:var(--paper);border:1px solid var(--line);border-radius:11px;
+    padding:6px 11px;box-shadow:var(--shadow);cursor:pointer;text-align:center;line-height:1.05;min-width:52px;
+    transition:background .12s,border-color .12s}
+  .day-pill .dw{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .day-pill .dn{font-family:'Fraunces',serif;font-size:15px;color:var(--navy);font-weight:600;margin-top:1px}
+  .day-pill.done{border-color:#D5E3C7}
+  .day-pill.done .dn{color:var(--vine)}
+  .day-pill.on{background:var(--navy);border-color:var(--navy)}
+  .day-pill.on .dw{color:#C9D2E6}
+  .day-pill.on .dn{color:#fff}
 
   /* Buttons */
   button{font-family:inherit}
@@ -213,6 +229,7 @@
     <!-- MAP -->
     <section id="tab-map" class="panel nopad active">
       <div id="map"></div>
+      <div id="dayStrip" class="day-strip"></div>
       <div class="map-stat" id="mapStat">
         <b id="msLeg">Whole route</b>
         <div class="row" id="msRow"></div>
@@ -678,6 +695,7 @@ function selectLeg(id, retry=true){
   document.getElementById('rtLegName').textContent='Leg '+leg.day+' · '+leg.title;
   if(rtMap && document.getElementById('tab-run').classList.contains('active')) renderRtLeg(); else rtReset();
   updateMapStat();
+  syncDayStrip();
 }
 function updateMapStat(){
   const leg=TRIP.legs[state.selLeg];
@@ -687,6 +705,26 @@ function updateMapStat(){
   const mapped = routeLength(leg.id)? fmtDist(routeLength(leg.id)) : (leg.train?'train':'—');
   const act = state.legActual[leg.id]? fmtDist(state.legActual[leg.id]) : '—';
   row.innerHTML=`<span>Planned <b>${planned}</b></span><span>Mapped <b>${mapped}</b></span><span>Ridden <b>${act}</b></span>`;
+}
+
+/* ---------- Day quick-toggle strip ---------- */
+function renderDayStrip(){
+  const host=document.getElementById('dayStrip'); if(!host) return;
+  host.innerHTML=TRIP.legs.map(leg=>{
+    const done=!!state.legActual[leg.id];
+    return `<div class="day-pill${leg.id===state.selLeg?' on':''}${done?' done':''}" data-id="${leg.id}">
+      <div class="dw">${leg.dow}</div><div class="dn">${leg.day}</div></div>`;
+  }).join('');
+  host.querySelectorAll('.day-pill').forEach(el=>el.onclick=()=>selectLeg(+el.dataset.id));
+}
+function syncDayStrip(){
+  const host=document.getElementById('dayStrip'); if(!host) return;
+  host.querySelectorAll('.day-pill').forEach(el=>{
+    const on=+el.dataset.id===state.selLeg;
+    el.classList.toggle('on',on);
+    el.classList.toggle('done',!!state.legActual[+el.dataset.id]);
+    if(on) el.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+  });
 }
 
 /* ---------- Render: Legs ---------- */
@@ -1216,6 +1254,7 @@ function injectManifest(){
 window.addEventListener('load',()=>{
   injectManifest();
   initMap();
+  renderDayStrip();
   renderLegs(); renderLegDetail(state.selLeg); renderInfo(); renderProgress();
   setUnit(state.unit);
   bind();
