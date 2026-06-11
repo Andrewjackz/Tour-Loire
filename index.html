@@ -123,6 +123,8 @@
   .icon-btn{border:1px solid var(--line);background:var(--paper);width:32px;height:32px;border-radius:9px;
     font-size:14px;cursor:pointer;color:var(--navy)}
   @media(min-width:560px){.modal{align-items:center}.sheet{border-radius:18px}}
+  .ver{text-align:center;font-size:11.5px;color:var(--muted);margin-top:14px;letter-spacing:.02em}
+  .ver b{color:var(--navy);font-weight:700}
 
   /* Buttons */
   button{font-family:inherit}
@@ -451,6 +453,7 @@
           Pick the leg, then choose the file.</div>
       </div>
       <button class="btn block" onclick="closeSettings()" style="margin-top:6px">Done</button>
+      <div class="ver" id="verLine"></div>
     </div>
   </div>
 </div>
@@ -462,6 +465,10 @@
    LOIRE VALLEY WINE TOUR — RIDE COMPANION
    Single-file PWA. Data extracted from the Discover France road-book.
    ============================================================ */
+
+/* Build stamp — bump on every edit. */
+const APP_VERSION = '1.0.0';
+const APP_BUILD   = '2026-06-10 23:10';   // local build time
 
 /* ---------- Coordinates [lat, lon] ---------- */
 const P = {
@@ -1303,6 +1310,8 @@ function injectManifest(){
 /* ---------- Boot ---------- */
 window.addEventListener('load',()=>{
   injectManifest();
+  document.getElementById('verLine').innerHTML='Loire Ride Companion · <b>v'+APP_VERSION+'</b> · built '+APP_BUILD;
+  console.log('Loire Ride Companion v'+APP_VERSION+' — built '+APP_BUILD);
   initMap();
   renderDayStrip();
   renderLegs(); renderLegDetail(state.selLeg); renderInfo(); renderProgress();
