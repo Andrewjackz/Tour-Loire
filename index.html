@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Loire Valley Wine Tour — Ride Companion</title>
+
+<!-- iOS / PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Loire Ride" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#1B2A4A" />
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    /* Palette grounded in the Loire: tuffeau limestone, château navy, Chinon claret, vineyard green */
+    --cream:#F7F4EC;        /* tuffeau */
+    --paper:#FFFFFF;
+    --navy:#1B2A4A;         /* château ink / primary */
+    --navy-2:#2E4372;
+    --claret:#8E2B3B;       /* Loire red wine accent */
+    --claret-2:#A4243B;
+    --vine:#4A6B3A;         /* progress / done */
+    --vine-2:#6E8C56;
+    --gold:#B8862F;         /* chenin / muted gold */
+    --ink:#22252B;
+    --muted:#6B6F76;
+    --line:#E4DECF;
+    --line-2:#EDE8DB;
+    --shadow:0 1px 2px rgba(27,42,74,.06),0 6px 18px rgba(27,42,74,.08);
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:var(--cream);
+    -webkit-font-smoothing:antialiased;overscroll-behavior:none;
+  }
+  h1,h2,h3,.serif{font-family:'Fraunces',Georgia,'Times New Roman',serif;font-weight:600;letter-spacing:-.01em}
+  .app{display:flex;flex-direction:column;height:100dvh;height:100vh}
+
+  /* Header */
+  header.top{
+    background:var(--navy);color:#fff;padding:10px 16px;
+    padding-top:calc(10px + env(safe-area-inset-top));
+    display:flex;align-items:center;gap:12px;flex:0 0 auto;
+  }
+  header.top .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--claret),var(--claret-2));
+    display:grid;place-items:center;font-size:16px;flex:0 0 auto}
+  header.top h1{font-size:16px;margin:0;line-height:1.1}
+  header.top .sub{font-size:11px;color:#C9D2E6;margin-top:1px;letter-spacing:.02em}
+  header.top .live{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;color:#C9D2E6}
+  .dot{width:9px;height:9px;border-radius:50%;background:#7d8aa5}
+  .dot.on{background:#5fd08a;box-shadow:0 0 0 0 rgba(95,208,138,.6);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(95,208,138,.55)}70%{box-shadow:0 0 0 9px rgba(95,208,138,0)}100%{box-shadow:0 0 0 0 rgba(95,208,138,0)}}
+
+  /* Main panels */
+  main{flex:1 1 auto;position:relative;overflow:hidden}
+  .panel{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch;display:none;padding:0}
+  .panel.active{display:block}
+  .panel.nopad{padding:0}
+  .pad{padding:16px}
+
+  /* Map */
+  #map{position:absolute;inset:0}
+  .map-overlay{position:absolute;left:12px;right:12px;bottom:12px;z-index:500;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
+  .map-overlay > *{pointer-events:auto}
+  .chip{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:8px 13px;font-size:13px;font-weight:600;
+    box-shadow:var(--shadow);display:inline-flex;align-items:center;gap:7px;cursor:pointer;color:var(--navy)}
+  .chip:active{transform:translateY(1px)}
+  .chip.alt{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .chip.rec{background:var(--claret);color:#fff;border-color:var(--claret)}
+  .map-stat{position:absolute;top:12px;left:12px;z-index:500;background:rgba(255,255,255,.94);border:1px solid var(--line);
+    border-radius:12px;box-shadow:var(--shadow);padding:9px 12px;font-size:12px;max-width:62%}
+  .map-stat b{font-family:'Fraunces',serif;font-size:15px;color:var(--navy)}
+  .map-stat .row{display:flex;gap:14px;margin-top:3px;color:var(--muted)}
+  .map-stat .row span b{font-size:13px}
+
+  /* Buttons */
+  button{font-family:inherit}
+  .btn{appearance:none;border:1px solid var(--navy);background:var(--navy);color:#fff;border-radius:10px;
+    padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+  .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:transparent;color:var(--navy)}
+  .btn.red{background:var(--claret);border-color:var(--claret)}
+  .btn.green{background:var(--vine);border-color:var(--vine)}
+  .btn.sm{padding:7px 11px;font-size:13px;border-radius:9px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.block{width:100%}
+
+  /* Cards */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+  .card + .card{margin-top:12px}
+  .card .hd{padding:13px 15px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:10px}
+  .card .bd{padding:13px 15px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--claret);font-weight:700}
+
+  .leg-card{cursor:pointer;transition:border-color .15s, box-shadow .15s}
+  .leg-card.sel{border-color:var(--navy);box-shadow:0 0 0 2px rgba(27,42,74,.12),var(--shadow)}
+  .leg-no{width:42px;height:42px;border-radius:11px;flex:0 0 auto;display:grid;place-items:center;
+    background:var(--cream);border:1px solid var(--line);text-align:center;line-height:1}
+  .leg-no .d{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .leg-no .n{font-family:'Fraunces',serif;font-size:18px;color:var(--navy);font-weight:600}
+  .leg-card.done .leg-no{background:#EEF3E8;border-color:#D5E3C7}
+  .leg-card.done .leg-no .n{color:var(--vine)}
+  .leg-title{font-size:15px;font-weight:600;color:var(--navy);line-height:1.2}
+  .leg-meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--cream);
+    border:1px solid var(--line);color:var(--navy)}
+  .tag.ride{background:#EAF0FA;border-color:#D5E1F4;color:var(--navy-2)}
+  .tag.rest{background:#F3ECE3;border-color:#E7D8C4;color:var(--gold)}
+  .tag.done{background:#EEF3E8;border-color:#D5E3C7;color:var(--vine)}
+
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
+  .kv dt{color:var(--muted)}
+  .kv dd{margin:0;font-weight:600;color:var(--ink)}
+
+  .item{display:flex;gap:11px;padding:10px 0;border-top:1px solid var(--line-2)}
+  .item:first-child{border-top:0}
+  .item .ic{width:30px;height:30px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;font-size:15px;background:var(--cream);border:1px solid var(--line)}
+  .item .tt{font-size:14px;font-weight:600;line-height:1.25}
+  .item .ds{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.35}
+  .item .tm{font-size:11px;font-weight:700;color:var(--claret);letter-spacing:.04em}
+
+  .seg{display:flex;background:var(--cream);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px}
+  .seg button{flex:1;border:0;background:transparent;border-radius:8px;padding:7px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+  .seg button.on{background:var(--paper);color:var(--navy);box-shadow:var(--shadow)}
+
+  input[type=text],input[type=password],input[type=number],select{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;background:var(--paper);color:var(--ink)}
+  label.fld{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:0 0 6px}
+  .field + .field{margin-top:13px}
+  .hint{font-size:12px;color:var(--muted);line-height:1.45;margin-top:6px}
+
+  /* Big number strip (Progress) */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .stat{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--shadow)}
+  .stat .lab{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .stat .val{font-family:'Fraunces',serif;font-size:26px;color:var(--navy);font-weight:600;line-height:1;margin-top:7px}
+  .stat .val small{font-size:13px;color:var(--muted);font-weight:600;font-family:'Inter',sans-serif}
+  .bar{height:9px;background:var(--line-2);border-radius:999px;overflow:hidden;margin-top:10px}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--vine),var(--vine-2));border-radius:999px}
+
+  /* POI list */
+  .poi{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line-2);cursor:pointer}
+  .poi:first-child{border-top:0}
+  .poi .ic{width:32px;height:32px;border-radius:9px;flex:0 0 auto;display:grid;place-items:center;font-size:16px;background:var(--cream);border:1px solid var(--line)}
+  .poi .nm{font-size:14px;font-weight:600;line-height:1.2}
+  .poi .mt{font-size:12px;color:var(--muted);margin-top:1px}
+  .poi .ds{font-size:12px;font-weight:700;color:var(--navy);white-space:nowrap;margin-left:auto}
+
+  .empty{text-align:center;color:var(--muted);font-size:13px;padding:26px 16px;line-height:1.5}
+  .empty .big{font-size:30px;margin-bottom:6px}
+
+  .note{background:#FBF7EE;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:10px;padding:11px 13px;font-size:12.5px;color:#5b5340;line-height:1.5}
+
+  /* Run-through controls */
+  .rt-bar{display:flex;align-items:center;gap:10px}
+  input[type=range]{width:100%;accent-color:var(--claret)}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite}
+  .spin.dark{border-color:rgba(27,42,74,.25);border-top-color:var(--navy)}
+  @keyframes rot{to{transform:rotate(360deg)}}
+
+  /* Bottom nav */
+  nav.tabs{flex:0 0 auto;display:flex;background:var(--paper);border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom)}
+  nav.tabs button{flex:1;border:0;background:transparent;padding:8px 2px 7px;cursor:pointer;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:600;font-family:inherit}
+  nav.tabs button .gl{font-size:19px;line-height:1}
+  nav.tabs button.on{color:var(--navy)}
+  nav.tabs button.on .gl{transform:translateY(-1px)}
+
+  /* Leaflet marker tweaks */
+  .me-dot{width:18px;height:18px;border-radius:50%;background:var(--claret);border:3px solid #fff;box-shadow:0 0 0 2px var(--claret),0 0 14px rgba(142,43,59,.5)}
+  .me-wrap{position:relative}
+  .me-acc{position:absolute;border-radius:50%;background:rgba(142,43,59,.13);border:1px solid rgba(142,43,59,.3);transform:translate(-50%,-50%);left:9px;top:9px}
+  .pin{font-size:20px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3));text-align:center;line-height:1}
+  .vmark{width:16px;height:16px;border-radius:50%;background:var(--navy);border:3px solid #fff;box-shadow:0 0 0 2px var(--navy)}
+  .leaflet-popup-content{font-family:'Inter',sans-serif;font-size:13px}
+  .leaflet-popup-content b{color:var(--navy)}
+  .toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:var(--navy);color:#fff;
+    padding:10px 16px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:var(--shadow);z-index:9999;opacity:0;
+    transition:opacity .25s, transform .25s;pointer-events:none;max-width:88%;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+  a{color:var(--claret-2)}
+  @media(min-width:760px){
+    .stats{grid-template-columns:repeat(6,1fr)}
+    .legs-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .legs-grid .card{margin-top:0}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="mark">🍷</div>
+    <div>
+      <h1>Loire Valley Wine Tour</h1>
+      <div class="sub">Amboise → Saumur · 11–18 Jul 2026 · Benfield &amp; Friends</div>
+    </div>
+    <div class="live"><span id="liveDot" class="dot"></span><span id="liveTxt">GPS off</span></div>
+  </header>
+
+  <main>
+    <!-- MAP -->
+    <section id="tab-map" class="panel nopad active">
+      <div id="map"></div>
+      <div class="map-stat" id="mapStat">
+        <b id="msLeg">Whole route</b>
+        <div class="row" id="msRow"></div>
+      </div>
+      <div class="map-overlay">
+        <button class="chip" id="locBtn">📍 Start tracking</button>
+        <button class="chip" id="recBtn">⏺ Record ride</button>
+        <button class="chip" id="nearBtn">🧭 Nearby</button>
+        <button class="chip" id="fitBtn">🗺 Fit route</button>
+      </div>
+    </section>
+
+    <!-- LEGS -->
+    <section id="tab-legs" class="panel">
+      <div class="pad">
+        <div class="eyebrow">Itinerary</div>
+        <h2 style="margin:4px 0 4px">8 days · 6 riding days</h2>
+        <div class="seg" style="margin:10px 0 14px">
+          <button id="unitKm" class="on" onclick="setUnit('km')">Kilometres</button>
+          <button id="unitMi" onclick="setUnit('mi')">Miles</button>
+        </div>
+        <div id="legsList" class="legs-grid"></div>
+      </div>
+    </section>
+
+    <!-- LEG DETAIL -->
+    <section id="tab-detail" class="panel">
+      <div class="pad" id="legDetail"></div>
+    </section>
+
+    <!-- RUN-THROUGH -->
+    <section id="tab-run" class="panel">
+      <div class="pad">
+        <div class="eyebrow">Virtual ride</div>
+        <h2 style="margin:4px 0 8px">Run-through</h2>
+        <p class="hint" style="margin-top:0">Play a leg from your armchair, scrub to any point, and pull the
+          areas of interest around that exact spot. Pick the leg on the <b>Legs</b> tab, then come back here.</p>
+
+        <div id="rtmap" style="height:300px;border-radius:var(--r);border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden;margin-bottom:12px"></div>
+
+        <div class="card"><div class="bd">
+          <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:8px" id="rtLegName">No leg selected</div>
+          <div class="rt-bar" style="margin-bottom:10px">
+            <button class="btn sm" id="rtPlay">▶ Play</button>
+            <button class="btn sm ghost" id="rtStop">■ Reset</button>
+            <select id="rtSpeed" style="width:auto">
+              <option value="1">1×</option><option value="2" selected>2×</option>
+              <option value="4">4×</option><option value="8">8×</option>
+            </select>
+          </div>
+          <input type="range" id="rtSlider" min="0" max="1000" value="0" />
+          <div class="rt-bar" style="margin-top:8px;font-size:12px;color:var(--muted)">
+            <span id="rtProg">0.0 km mapped</span>
+            <button class="btn sm red" id="rtPoi" style="margin-left:auto">🧭 Interest here</button>
+          </div>
+        </div></div>
+
+        <div class="card" id="rtPoiCard" style="display:none"><div class="bd">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <div class="eyebrow" style="color:var(--navy)">Around this point</div>
+            <button class="btn sm ghost" id="rtGuide" style="margin-left:auto">✨ Ask the guide</button>
+          </div>
+          <div id="rtGuideOut"></div>
+          <div id="rtPoiList"></div>
+        </div></div>
+      </div>
+    </section>
+
+    <!-- PROGRESS -->
+    <section id="tab-prog" class="panel">
+      <div class="pad">
+        <div class="eyebrow">Logbook</div>
+        <h2 style="margin:4px 0 12px">Progress</h2>
+        <div class="stats" id="progStats"></div>
+
+        <div class="card" style="margin-top:14px"><div class="bd">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:13px;font-weight:600;color:var(--navy)">Recorded vs planned</div>
+            <span id="progPct" class="tag done">0%</span>
+          </div>
+          <div class="bar"><i id="progBar" style="width:0%"></i></div>
+          <div class="hint" id="progSummary" style="margin-top:8px"></div>
+        </div></div>
+
+        <h3 style="margin:18px 0 8px;font-size:15px">By leg</h3>
+        <div id="legActuals"></div>
+
+        <h3 style="margin:18px 0 8px;font-size:15px">Recorded sessions</h3>
+        <div id="sessionList"></div>
+
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+          <button class="btn sm ghost" id="expBtn">⬇ Export log (JSON)</button>
+          <button class="btn sm ghost" id="impBtn">⬆ Import log</button>
+          <button class="btn sm ghost" id="resetBtn" style="color:var(--claret);border-color:var(--claret)">Reset progress</button>
+          <input type="file" id="impFile" accept="application/json" hidden>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRIP INFO + SETTINGS -->
+    <section id="tab-info" class="panel">
+      <div class="pad">
+        <div class="eyebrow">Trip</div>
+        <h2 style="margin:4px 0 10px">Overview &amp; settings</h2>
+
+        <div class="card"><div class="bd">
+          <dl class="kv">
+            <dt>Operator</dt><dd>Discover France (self-guided)</dd>
+            <dt>Group code</dt><dd>DIS2511013</dd>
+            <dt>Dates</dt><dd>11–18 Jul 2026 (8 days)</dd>
+            <dt>Orientation</dt><dd>Sun 12 Jul, 10:00 — hotel lobby, Amboise</dd>
+            <dt>Tour leader</dt><dd>Mike Benfield</dd>
+            <dt>Tour manager</dt><dd>Gabriel Tavares · +33 4 67 15 82 04</dd>
+            <dt>Emergency</dt><dd>+33 6 41 19 20 11 (9am–7pm)</dd>
+            <dt>Concierge</dt><dd>+33 6 27 81 75 57</dd>
+          </dl>
+        </div></div>
+
+        <div class="card"><div class="hd"><span>🛏</span><b>Accommodation</b></div><div class="bd" id="hotelList"></div></div>
+
+        <div class="card"><div class="hd"><span>🍷</span><b>Tastings &amp; meals</b></div><div class="bd" id="diningList"></div></div>
+
+        <div class="card"><div class="hd"><span>⚙️</span><b>Settings</b></div><div class="bd">
+          <div class="field">
+            <label class="fld" for="apiKey">Anthropic API key (optional — for “Ask the guide”)</label>
+            <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+            <div class="hint">Stored only in this browser’s local storage. Used solely for guide narration.
+              Calling Anthropic from a browser exposes the key to anyone who can read this page’s storage on the device — fine for your own phone/PC, don’t deploy it on a shared machine.</div>
+          </div>
+          <div class="field">
+            <label class="fld" for="model">Guide model</label>
+            <select id="model">
+              <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fast, cheap — default)</option>
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+              <option value="claude-opus-4-8">Claude Opus 4.8</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="fld" for="radius">Nearby search radius</label>
+            <select id="radius">
+              <option value="1500">1.5 km</option>
+              <option value="3000" selected>3 km</option>
+              <option value="5000">5 km</option>
+              <option value="8000">8 km</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="fld" for="profile">Cycle routing profile (BRouter)</label>
+            <select id="profile">
+              <option value="trekking" selected>Trekking — prefers cycle paths (Loire à Vélo)</option>
+              <option value="fastbike">Fast bike — quicker roads</option>
+              <option value="shortest">Shortest</option>
+            </select>
+            <div class="hint">Routes follow OpenStreetMap cycleways where they exist. If a leg shows a dashed
+              straight line, the router was unreachable — tap a leg again to retry.</div>
+          </div>
+          <div class="field">
+            <label class="fld" for="gpxFile">Import official GPX (overrides routing for one leg)</label>
+            <select id="gpxLeg" style="margin-bottom:8px"></select>
+            <input type="file" id="gpxFile" accept=".gpx,application/gpx+xml">
+            <div class="hint">If the Discover France road-book includes GPX tracks, import them here for exact lines.
+              Pick the leg, then choose the file.</div>
+          </div>
+        </div></div>
+
+        <div class="note" style="margin-top:14px">
+          <b>Read me / accuracy.</b> Position tracking needs location permission and works best on the iPhone in the
+          field; on a desktop it’s Wi-Fi-based and rough. Distances under “planned” come straight from your road-book;
+          “mapped” lengths come from the cycle router and are approximations until you import the official GPX.
+          Progress is saved per-device — use Export/Import to move it between PC and phone.
+        </div>
+        <div style="height:20px"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs">
+    <button data-tab="map" class="on"><span class="gl">🗺</span>Map</button>
+    <button data-tab="legs"><span class="gl">📋</span>Legs</button>
+    <button data-tab="run"><span class="gl">🎬</span>Run-through</button>
+    <button data-tab="prog"><span class="gl">📈</span>Progress</button>
+    <button data-tab="info"><span class="gl">ℹ️</span>Trip</button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+/* ============================================================
+   LOIRE VALLEY WINE TOUR — RIDE COMPANION
+   Single-file PWA. Data extracted from the Discover France road-book.
+   ============================================================ */
+
+/* ---------- Coordinates [lat, lon] ---------- */
+const P = {
+  amboise:[47.410471,0.983868], closLuce:[47.40986,0.98966], chRoyal:[47.41315,0.98556],
+  miniCh:[47.41889,0.97005], chaumont:[47.479062,1.181967], chenonceau:[47.324870,1.070300],
+  montrichard:[47.34230,1.17760], vouvray:[47.41080,0.79970], rochecorbon:[47.40830,0.75220],
+  gaudrelle:[47.41260,0.74620], tours:[47.389500,0.692500], placePlum:[47.39470,0.68390],
+  cathTours:[47.39530,0.69570], savonnieres:[47.35560,0.54360], villandry:[47.340200,0.514830],
+  sache:[47.24470,0.54360], azay:[47.260700,0.467500], azayCh:[47.25850,0.46650],
+  villaines:[47.22060,0.48920], crissay:[47.15470,0.40720], chinon:[47.169000,0.241000],
+  chinonFort:[47.16810,0.23750], noire:[47.15560,0.21940], candes:[47.20860,0.07390],
+  fontevraud:[47.181788,0.049988], turquant:[47.21970,-0.00940], parnay:[47.22280,-0.03310],
+  saumur:[47.259200,-0.073100], saumurCh:[47.25690,-0.08220], spdc:[47.385800,0.710600]
+};
+
+/* ---------- Trip / legs ---------- */
+const TRIP = {
+  hotels:[
+    {n:"Hôtel Clos d'Amboise ★★★★",t:"Amboise · nights 1–3",a:"27 rue Rabelais, 37400 Amboise",
+     d:"Check-in 15:00 · Check-out 11:00 · AC",u:"http://www.leclosdamboise.com/en/",p:P.amboise},
+    {n:"Hôtel Oceania l'Univers ★★★★",t:"Tours · night 4",a:"Tours centre",d:"Place Plumereau & old town nearby",p:P.tours},
+    {n:"Le Grand Monarque ★★★★",t:"Azay-le-Rideau · night 5",a:"Azay-le-Rideau",d:"Dinner included (20:00)",p:P.azay},
+    {n:"Hôtel le Plantagenet ★★★",t:"Chinon · night 6",a:"Chinon",d:"Below the royal fortress",p:P.chinon},
+    {n:"Hôtel Anne d'Anjou ★★★★",t:"Saumur · night 7",a:"Saumur",d:"By the historic centre & château",p:P.saumur}
+  ],
+  legs:[
+    { id:0, day:1, dow:"Sat", date:"11 Jul", type:"arrival", title:"Arrive Amboise",
+      start:{name:"Saint-Pierre-des-Corps",p:P.spdc}, finish:{name:"Amboise",p:P.amboise},
+      via:[], km:[], mi:[], elev:[], hotel:"Hôtel Clos d'Amboise",
+      acts:[{tm:"",ic:"🚆",ty:"travel",tt:"Train + taxi to Amboise",ds:"Saint-Pierre-des-Corps is ~1h from Paris. Transfer on your own to the hotel."},
+            {tm:"",ic:"🏰",ty:"poi",tt:"Optional: Clos Lucé / Royal Château",ds:"Leonardo da Vinci’s last home (1516–1519), short walk from the centre."}],
+      pois:[["Royal Château d'Amboise",P.chRoyal,"🏰"],["Clos Lucé (da Vinci)",P.closLuce,"🏰"],["Parc Mini-Châteaux",P.miniCh,"🏰"]],
+      note:"No ride today. Settle in and explore Amboise." },
+
+    { id:1, day:2, dow:"Sun", date:"12 Jul", type:"ride", title:"Amboise → Chaumont-sur-Loire loop",
+      start:{name:"Amboise",p:P.amboise}, finish:{name:"Amboise",p:P.amboise},
+      via:[{name:"Chaumont-sur-Loire",p:P.chaumont}],
+      km:[44,48], mi:[27,30], elev:[345,241], loop:true, hotel:"Hôtel Clos d'Amboise",
+      acts:[{tm:"10:00",ic:"🧰",ty:"meeting",tt:"Orientation & bike set-up",ds:"Local guide meets you in the lobby — bikes, road-book, fit."},
+            {tm:"",ic:"🌿",ty:"poi",tt:"Chaumont-sur-Loire",ds:"Château + International Garden Festival, 40 m above the wild Loire. Return via back-country paths."}],
+      pois:[["Château de Chaumont-sur-Loire",P.chaumont,"🌿"]],
+      note:"Follow the Loire downstream to Chaumont, return on quiet lanes." },
+
+    { id:2, day:3, dow:"Mon", date:"13 Jul", type:"ride", title:"Amboise → Chenonceau loop",
+      start:{name:"Amboise",p:P.amboise}, finish:{name:"Amboise",p:P.amboise},
+      via:[{name:"Chenonceau",p:P.chenonceau}],
+      km:[36,53], mi:[21,32], elev:[279,415], loop:true, hotel:"Hôtel Clos d'Amboise",
+      acts:[{tm:"",ic:"🏰",ty:"poi",tt:"Château de Chenonceau",ds:"The ‘Ladies’ Château’ arching over the Cher. Long option extends via Montrichard, La Genaudière, St-Règle."},
+            {tm:"16:00",ic:"🍷",ty:"tasting",tt:"Wine tasting — Caves Duhard",ds:"Caves Ambacia, Amboise. Vintage Touraine wines, 5 wines with local specialities."}],
+      pois:[["Château de Chenonceau",P.chenonceau,"🏰"],["Montrichard (long option)",P.montrichard,"🏯"]],
+      note:"Forest alleys past Parc Mini-Châteaux, down to Chenonceau." },
+
+    { id:3, day:4, dow:"Tue", date:"14 Jul", type:"ride", title:"Amboise → Vouvray → Tours",
+      start:{name:"Amboise",p:P.amboise}, finish:{name:"Tours",p:P.tours},
+      via:[{name:"Vouvray",p:P.vouvray},{name:"Rochecorbon",p:P.rochecorbon}],
+      km:[34], mi:[21], elev:[290], hotel:"Hôtel Oceania l'Univers",
+      acts:[{tm:"",ic:"🍇",ty:"poi",tt:"Montlouis & Vouvray vineyards",ds:"Sparkling Chenin Blanc country; cross the bridge into Vouvray."},
+            {tm:"14:00",ic:"🍷",ty:"tasting",tt:"Wine tasting — Château Gaudrelle",ds:"Rochecorbon. Cellar + vineyard tour. Ships wine home to the US."},
+            {tm:"18:00",ic:"🍽",ty:"meal",tt:"Cooking class + meal — Tours à Table",ds:"2h class + 1h tasting: prepare a French starter, main and dessert."}],
+      pois:[["Place Plumereau, Tours",P.placePlum,"🍽"],["Cathédrale Saint-Gatien",P.cathTours,"⛪"]],
+      note:"Luggage transferred. Easy ride into bike-friendly Tours." },
+
+    { id:4, day:5, dow:"Wed", date:"15 Jul", type:"ride", title:"Tours → Villandry → Azay-le-Rideau",
+      start:{name:"Tours",p:P.tours}, finish:{name:"Azay-le-Rideau",p:P.azay},
+      via:[{name:"Savonnières",p:P.savonnieres},{name:"Villandry",p:P.villandry},{name:"Saché",p:P.sache}],
+      km:[34,46], mi:[21,28], elev:[200,250], hotel:"Le Grand Monarque",
+      acts:[{tm:"",ic:"🌿",ty:"poi",tt:"Gardens of Villandry",ds:"The last great Renaissance château of the Loire — famous geometric gardens."},
+            {tm:"",ic:"✒️",ty:"poi",tt:"Château de Saché",ds:"Balzac’s writing retreat (La Comédie Humaine)."},
+            {tm:"13:30",ic:"🍷",ty:"tasting",tt:"Wine tasting — Château de l'Aulée",ds:"Azay-le-Rideau. The Loire’s most modern winery."},
+            {tm:"20:00",ic:"🍽",ty:"meal",tt:"Dinner included at the hotel",ds:"Le Grand Monarque, Azay-le-Rideau."}],
+      pois:[["Château de Villandry",P.villandry,"🌿"],["Château d'Azay-le-Rideau",P.azayCh,"🏰"],["Petrifying caves, Savonnières",P.savonnieres,"👁"]],
+      note:"Loire à Vélo to Savonnières, then the gardens." },
+
+    { id:5, day:6, dow:"Thu", date:"16 Jul", type:"ride", title:"Azay-le-Rideau → Chinon",
+      start:{name:"Azay-le-Rideau",p:P.azay}, finish:{name:"Chinon",p:P.chinon},
+      via:[{name:"Villaines-les-Rochers",p:P.villaines},{name:"Crissay-sur-Manse",p:P.crissay}],
+      km:[41,52], mi:[25,31], elev:[171,326], hotel:"Hôtel le Plantagenet",
+      acts:[{tm:"",ic:"🧺",ty:"poi",tt:"Villaines-les-Rochers",ds:"Basketry capital of France — cave-village of osier weavers."},
+            {tm:"",ic:"🏘",ty:"poi",tt:"Crissay-sur-Manse",ds:"One of the ‘Most Beautiful Villages of France’."},
+            {tm:"15:30",ic:"🍷",ty:"tasting",tt:"Wine tasting — Domaine de Noiré",ds:"Chinon reds, below the clifftop royal fortress."}],
+      pois:[["Forteresse royale de Chinon",P.chinonFort,"🏰"],["Villaines-les-Rochers",P.villaines,"🧺"],["Crissay-sur-Manse",P.crissay,"🏘"]],
+      note:"Hidden Touraine villages on the way to Chinon." },
+
+    { id:6, day:7, dow:"Fri", date:"17 Jul", type:"ride", title:"Chinon → Fontevraud → Saumur",
+      start:{name:"Chinon",p:P.chinon}, finish:{name:"Saumur",p:P.saumur},
+      via:[{name:"Candes-Saint-Martin",p:P.candes},{name:"Fontevraud",p:P.fontevraud},{name:"Turquant",p:P.turquant},{name:"Parnay",p:P.parnay}],
+      km:[34,46], mi:[21,29], elev:[250,380], hotel:"Hôtel Anne d'Anjou",
+      acts:[{tm:"",ic:"⛪",ty:"poi",tt:"Fontevraud Abbey",ds:"Plantagenet necropolis — Richard the Lionheart’s tomb."},
+            {tm:"",ic:"🪨",ty:"poi",tt:"Turquant troglodytes",ds:"Among the largest heritage troglodyte caves in the world."},
+            {tm:"15:30",ic:"🍷",ty:"tasting",tt:"Wine tasting — Château de Parnay",ds:"Saumur-Champigny terraces above the Loire."}],
+      pois:[["Fontevraud Abbey",P.fontevraud,"⛪"],["Candes-Saint-Martin",P.candes,"🏘"],["Turquant",P.turquant,"🪨"],["Château de Saumur",P.saumurCh,"🏰"]],
+      note:"Vienne meets Loire; troglodyte villages into Saumur." },
+
+    { id:7, day:8, dow:"Sat", date:"18 Jul", type:"departure", title:"Depart Saumur",
+      start:{name:"Saumur",p:P.saumur}, finish:{name:"Saint-Pierre-des-Corps",p:P.spdc},
+      via:[], km:[], mi:[], elev:[], train:true, hotel:"",
+      acts:[{tm:"",ic:"🚆",ty:"travel",tt:"Train to Saint-Pierre-des-Corps",ds:"End of tour. TER Centre-Val de Loire several times a day."}],
+      pois:[], note:"Trip ends." }
+  ]
+};
+
+/* ---------- State / storage ---------- */
+const LS='loire2026:';
+const store={
+  get:(k,d)=>{try{const v=localStorage.getItem(LS+k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+  set:(k,v)=>{try{localStorage.setItem(LS+k,JSON.stringify(v))}catch(e){}}
+};
+let state={
+  unit: store.get('unit','km'),
+  selLeg: store.get('selLeg',1),
+  routes: store.get('routes',{}),      // legId -> [[lat,lon],...]
+  sessions: store.get('sessions',[]),  // {legId,dist,ts}
+  legActual: store.get('legActual',{}),// legId -> meters
+  recording:false, watchId:null, recLast:null, recSessionDist:0,
+  apiKey: store.get('apiKey',''),
+  model: store.get('model','claude-haiku-4-5-20251001'),
+  radius: store.get('radius',3000),
+  profile: store.get('profile','trekking')
+};
+
+/* ---------- Map ---------- */
+let map, meMarker, meAccCircle, nearLayer, routeLayer, poiLayer, vMarker, designated=null;
+const routeLines={}; // legId -> polyline
+const cumCache={};   // legId -> cumulative distance array (m)
+
+function initMap(){
+  map=L.map('map',{zoomControl:true,attributionControl:true}).setView(P.tours,10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, attribution:'© OpenStreetMap'
+  }).addTo(map);
+  routeLayer=L.layerGroup().addTo(map);
+  poiLayer=L.layerGroup().addTo(map);
+  nearLayer=L.layerGroup().addTo(map);
+
+  // start/finish + château markers for whole trip
+  TRIP.legs.forEach(leg=>{
+    leg.pois.forEach(([nm,p,ic])=>{
+      L.marker(p,{icon:L.divIcon({className:'',html:`<div class="pin">${ic}</div>`,iconSize:[24,24],iconAnchor:[12,20]})})
+       .bindPopup(`<b>${nm}</b>`).addTo(poiLayer);
+    });
+  });
+  // overnight town labels
+  const seen=new Set();
+  TRIP.legs.forEach(leg=>{
+    [leg.start,leg.finish].forEach(s=>{
+      const key=s.name; if(seen.has(key))return; seen.add(key);
+      L.circleMarker(s.p,{radius:5,color:'#1B2A4A',weight:2,fillColor:'#fff',fillOpacity:1})
+       .bindPopup(`<b>${s.name}</b>`).addTo(poiLayer);
+    });
+  });
+
+  map.on('click',e=>{ setDesignated([e.latlng.lat,e.latlng.lng]); });
+
+  drawAllRoutes();
+  selectLeg(state.selLeg,false);
+}
+
+/* ---------- Routing (BRouter, bike-aware) ---------- */
+function legWaypoints(leg){
+  const w=[leg.start.p, ...leg.via.map(v=>v.p), leg.finish.p];
+  if(leg.loop) w.push(leg.start.p); // close the loop
+  return w;
+}
+async function fetchRoute(leg){
+  if(leg.train || leg.type==='arrival' && leg.via.length===0 && false) return null;
+  if(state.routes[leg.id]) return state.routes[leg.id];
+  const wp=legWaypoints(leg);
+  if(wp.length<2) return null;
+  const lonlats=wp.map(([la,lo])=>`${lo.toFixed(6)},${la.toFixed(6)}`).join('|');
+  const url=`https://brouter.de/brouter?lonlats=${lonlats}&profile=${encodeURIComponent(state.profile)}&alternativeidx=0&format=geojson`;
+  try{
+    const r=await fetch(url);
+    if(!r.ok) throw new Error('router '+r.status);
+    const gj=await r.json();
+    const coords=gj.features[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+    state.routes[leg.id]=coords; store.set('routes',state.routes);
+    return coords;
+  }catch(e){ return null; }
+}
+function drawAllRoutes(){
+  TRIP.legs.forEach(async leg=>{
+    if(leg.type==='arrival') return;
+    const coords=await fetchRoute(leg);
+    drawLegLine(leg, coords);
+  });
+}
+function drawLegLine(leg, coords){
+  if(routeLines[leg.id]){ routeLayer.removeLayer(routeLines[leg.id]); }
+  const isActive = leg.id===state.selLeg;
+  if(coords && coords.length>1){
+    routeLines[leg.id]=L.polyline(coords,{
+      color:isActive?'#8E2B3B':'#2E4372', weight:isActive?5:3.2,
+      opacity:isActive?.95:.55, lineCap:'round'
+    });
+    cumCache[leg.id]=cumulative(coords);
+  }else{
+    // fallback dashed straight line through waypoints
+    const wp=legWaypoints(leg);
+    routeLines[leg.id]=L.polyline(wp,{color:'#A4243B',weight:2.5,opacity:.6,dashArray:'6 8'})
+      .bindPopup(`<b>${leg.title}</b><br>Router unavailable — straight-line approximation. Tap the leg to retry.`);
+    cumCache[leg.id]=cumulative(wp);
+  }
+  routeLines[leg.id].addTo(routeLayer);
+}
+
+/* ---------- Geometry ---------- */
+function hav(a,b){
+  const R=6371000,toR=Math.PI/180;
+  const dLat=(b[0]-a[0])*toR, dLon=(b[1]-a[1])*toR;
+  const la1=a[0]*toR, la2=b[0]*toR;
+  const x=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function cumulative(coords){
+  const out=[0]; for(let i=1;i<coords.length;i++) out.push(out[i-1]+hav(coords[i-1],coords[i]));
+  return out;
+}
+function routeLength(legId){ const c=cumCache[legId]; return c?c[c.length-1]:0; }
+// nearest point on polyline → {idx, dist(m to route), along(m)}
+function snap(coords,cum,pt){
+  let best={d:Infinity,idx:0,along:0};
+  for(let i=0;i<coords.length-1;i++){
+    const proj=projSeg(pt,coords[i],coords[i+1]);
+    if(proj.d<best.d) best={d:proj.d,idx:i,along:cum[i]+proj.t*(cum[i+1]-cum[i])};
+  }
+  return best;
+}
+function projSeg(p,a,b){
+  // approximate planar projection (fine over a few km)
+  const k=Math.cos(p[0]*Math.PI/180);
+  const ax=a[1]*k,ay=a[0],bx=b[1]*k,by=b[0],px=p[1]*k,py=p[0];
+  const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy||1e-9;
+  let t=((px-ax)*dx+(py-ay)*dy)/L2; t=Math.max(0,Math.min(1,t));
+  const cx=ax+t*dx, cy=ay+t*dy;
+  const d=hav([py,px/k],[cy,cx/k]);
+  return {t,d};
+}
+
+/* ---------- Units ---------- */
+function fmtDist(m,dec=1){
+  if(state.unit==='mi') return (m/1609.344).toFixed(dec)+' mi';
+  return (m/1000).toFixed(dec)+' km';
+}
+function setUnit(u){
+  state.unit=u; store.set('unit',u);
+  document.getElementById('unitKm').classList.toggle('on',u==='km');
+  document.getElementById('unitMi').classList.toggle('on',u==='mi');
+  renderLegs(); renderProgress(); renderLegDetail(state.selLeg); updateMapStat();
+}
+
+/* ---------- Leg selection ---------- */
+function selectLeg(id, retry=true){
+  state.selLeg=id; store.set('selLeg',id);
+  // restyle lines
+  TRIP.legs.forEach(leg=>{ if(routeLines[leg.id]){
+    const a=leg.id===id;
+    routeLines[leg.id].setStyle({color:a?'#8E2B3B':'#2E4372',weight:a?5:3.2,opacity:a?.95:.55});
+    if(a) routeLines[leg.id].bringToFront();
+  }});
+  const leg=TRIP.legs[id];
+  if(retry && !state.routes[id] && leg.type!=='arrival'){
+    fetchRoute(leg).then(c=>drawLegLine(leg,c));
+  }
+  // fit
+  const ln=routeLines[id];
+  if(ln && ln.getLatLngs().length){ try{map.fitBounds(ln.getBounds().pad(.18));}catch(e){} }
+  else { map.setView(leg.finish.p,12); }
+  document.querySelectorAll('#legsList .leg-card').forEach(el=>el.classList.toggle('sel',+el.dataset.id===id));
+  document.getElementById('rtLegName').textContent='Leg '+leg.day+' · '+leg.title;
+  if(rtMap && document.getElementById('tab-run').classList.contains('active')) renderRtLeg(); else rtReset();
+  updateMapStat();
+}
+function updateMapStat(){
+  const leg=TRIP.legs[state.selLeg];
+  document.getElementById('msLeg').textContent='Leg '+leg.day+' — '+leg.title;
+  const row=document.getElementById('msRow');
+  const planned = leg.km.length? (leg.km.map(k=> state.unit==='mi'?(k*0.621371).toFixed(0)+' mi':k+' km').join(' / ')) : '—';
+  const mapped = routeLength(leg.id)? fmtDist(routeLength(leg.id)) : (leg.train?'train':'—');
+  const act = state.legActual[leg.id]? fmtDist(state.legActual[leg.id]) : '—';
+  row.innerHTML=`<span>Planned <b>${planned}</b></span><span>Mapped <b>${mapped}</b></span><span>Ridden <b>${act}</b></span>`;
+}
+
+/* ---------- Render: Legs ---------- */
+function renderLegs(){
+  const host=document.getElementById('legsList'); host.innerHTML='';
+  TRIP.legs.forEach(leg=>{
+    const done = !!state.legActual[leg.id];
+    const tag = leg.type==='ride' ? '<span class="tag ride">Ride</span>'
+              : leg.type==='arrival' ? '<span class="tag">Arrive</span>'
+              : '<span class="tag">Depart</span>';
+    const dist = leg.km.length
+      ? (state.unit==='mi'? leg.mi.join(' / ')+' mi' : leg.km.join(' / ')+' km')
+      : (leg.train?'by train':'—');
+    const el=document.createElement('div');
+    el.className='card leg-card'+(leg.id===state.selLeg?' sel':'')+(done?' done':'');
+    el.dataset.id=leg.id;
+    el.innerHTML=`
+      <div class="bd" style="display:flex;gap:13px;align-items:center">
+        <div class="leg-no"><div class="d">${leg.dow}</div><div class="n">${leg.day}</div></div>
+        <div style="flex:1;min-width:0">
+          <div class="leg-title">${leg.title}</div>
+          <div class="leg-meta">${leg.start.name} → ${leg.finish.name} · ${dist}${leg.elev.length?' · ↑'+leg.elev.join('/')+' m':''}</div>
+          <div style="margin-top:7px;display:flex;gap:6px;align-items:center">${tag}
+            ${done?'<span class="tag done">✓ '+fmtDist(state.legActual[leg.id])+'</span>':''}
+            <span class="tag rest">${leg.acts.filter(a=>a.ty==='tasting').length} tasting${leg.acts.filter(a=>a.ty==='tasting').length!==1?'s':''}</span>
+          </div>
+        </div>
+        <div style="color:var(--muted);font-size:20px">›</div>
+      </div>`;
+    el.onclick=()=>{ selectLeg(leg.id); renderLegDetail(leg.id); showTab('detail'); };
+    host.appendChild(el);
+  });
+}
+
+/* ---------- Render: Leg detail ---------- */
+function renderLegDetail(id){
+  const leg=TRIP.legs[id]; if(!leg) return;
+  const host=document.getElementById('legDetail');
+  const dist = leg.km.length ? (state.unit==='mi'? leg.mi.join(' or ')+' mi' : leg.km.join(' or ')+' km') : (leg.train?'by train':'—');
+  const mapped = routeLength(id)? fmtDist(routeLength(id)) : '—';
+  const actsHtml = leg.acts.map(a=>`
+    <div class="item">
+      <div class="ic">${a.ic}</div>
+      <div style="flex:1">
+        ${a.tm?`<div class="tm">${a.tm}</div>`:''}
+        <div class="tt">${a.tt}</div>
+        <div class="ds">${a.ds}</div>
+      </div>
+    </div>`).join('');
+  const hotel = TRIP.hotels.find(h=>h.n.startsWith(leg.hotel));
+  host.innerHTML=`
+    <button class="btn ghost sm" onclick="showTab('legs')" style="margin-bottom:12px">‹ All legs</button>
+    <div class="eyebrow">Day ${leg.day} · ${leg.dow} ${leg.date}</div>
+    <h2 style="margin:4px 0 10px">${leg.title}</h2>
+    <div class="card"><div class="bd">
+      <dl class="kv">
+        <dt>Start</dt><dd>${leg.start.name}</dd>
+        <dt>Finish</dt><dd>${leg.finish.name}</dd>
+        <dt>Planned</dt><dd>${dist}${leg.elev.length?' · ↑'+leg.elev.join(' or ')+' m':''}</dd>
+        <dt>Mapped</dt><dd>${mapped}${leg.loop?' (loop)':''}</dd>
+        <dt>Ridden</dt><dd>${state.legActual[id]?fmtDist(state.legActual[id]):'not yet'}</dd>
+      </dl>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn sm" onclick="selectLeg(${id});showTab('map')">🗺 Show on map</button>
+        <button class="btn sm ghost" onclick="selectLeg(${id});showTab('run')">🎬 Run-through</button>
+      </div>
+    </div></div>
+    <h3 style="margin:16px 0 8px;font-size:15px">Activities, tastings &amp; meals</h3>
+    <div class="card"><div class="bd">${actsHtml||'<div class="empty">Travel day.</div>'}</div></div>
+    ${hotel?`
+    <h3 style="margin:16px 0 8px;font-size:15px">Tonight</h3>
+    <div class="card"><div class="bd">
+      <div class="item"><div class="ic">🛏</div><div style="flex:1">
+        <div class="tt">${hotel.n}</div><div class="ds">${hotel.a}${hotel.d?' · '+hotel.d:''}</div>
+        ${hotel.u?`<div class="ds"><a href="${hotel.u}" target="_blank" rel="noopener">Hotel website ↗</a></div>`:''}
+      </div></div>
+    </div></div>`:''}
+    <h3 style="margin:16px 0 8px;font-size:15px">Points of interest</h3>
+    <div class="card"><div class="bd">
+      ${leg.pois.length? leg.pois.map(([nm,p,ic])=>`
+        <div class="poi" onclick="selectLeg(${id});showTab('map');map.setView([${p[0]},${p[1]}],14)">
+          <div class="ic">${ic}</div><div><div class="nm">${nm}</div><div class="mt">Tap to centre on map</div></div>
+        </div>`).join('') : '<div class="empty">—</div>'}
+    </div></div>
+    <div class="note" style="margin-top:14px">${leg.note}</div>
+    <div style="height:16px"></div>`;
+}
+
+/* ---------- Geolocation tracking ---------- */
+function setLive(on,txt){
+  document.getElementById('liveDot').classList.toggle('on',on);
+  document.getElementById('liveTxt').textContent=txt;
+}
+function startTracking(){
+  if(!navigator.geolocation){ toast('Geolocation not supported here'); return; }
+  if(state.watchId!=null){ stopTracking(); return; }
+  setLive(false,'locating…');
+  state.watchId=navigator.geolocation.watchPosition(onPos,onPosErr,{enableHighAccuracy:true,maximumAge:2000,timeout:15000});
+  document.getElementById('locBtn').classList.add('alt');
+  document.getElementById('locBtn').textContent='📍 Tracking…';
+}
+function stopTracking(){
+  if(state.watchId!=null){ navigator.geolocation.clearWatch(state.watchId); state.watchId=null; }
+  setLive(false,'GPS off');
+  document.getElementById('locBtn').classList.remove('alt');
+  document.getElementById('locBtn').textContent='📍 Start tracking';
+  if(state.recording) toggleRecord();
+}
+let firstFix=true;
+function onPos(pos){
+  const {latitude:la,longitude:lo,accuracy:acc}=pos.coords;
+  const here=[la,lo];
+  setLive(true,'live · ±'+Math.round(acc)+'m');
+  // me marker
+  if(!meMarker){
+    meMarker=L.marker(here,{icon:L.divIcon({className:'',html:'<div class="me-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]}),zIndexOffset:1000}).addTo(map);
+  } else meMarker.setLatLng(here);
+  if(meAccCircle) map.removeLayer(meAccCircle);
+  meAccCircle=L.circle(here,{radius:acc,color:'#8E2B3B',weight:1,opacity:.4,fillColor:'#8E2B3B',fillOpacity:.07}).addTo(map);
+  if(firstFix){ map.setView(here,15); firstFix=false; }
+
+  // snap to active leg → progress
+  const leg=TRIP.legs[state.selLeg];
+  const coords=state.routes[leg.id]|| (routeLines[leg.id]?routeLines[leg.id].getLatLngs().map(p=>[p.lat,p.lng]):null);
+  if(coords && cumCache[leg.id]){
+    const s=snap(coords,cumCache[leg.id],here);
+    const total=routeLength(leg.id);
+    const pct = total? Math.min(100,Math.round(100*s.along/total)) : 0;
+    document.getElementById('liveTxt').textContent = `${pct}% of leg · ±${Math.round(acc)}m`;
+  }
+  // recording
+  if(state.recording && acc<60){
+    if(state.recLast){
+      const step=hav(state.recLast,here);
+      if(step>3 && step<120){ // ignore jitter & GPS jumps
+        state.recSessionDist+=step;
+        addLegActual(leg.id, step);
+        updateRecChip();
+      }
+    }
+    state.recLast=here;
+  }
+}
+function onPosErr(e){ setLive(false,'GPS error'); toast('Location: '+(e.message||'permission needed')); }
+
+function toggleRecord(){
+  if(!state.recording){
+    if(state.watchId==null) startTracking();
+    state.recording=true; state.recLast=null; state.recSessionDist=0;
+    document.getElementById('recBtn').classList.add('rec');
+    updateRecChip();
+    toast('Recording leg '+TRIP.legs[state.selLeg].day);
+  }else{
+    state.recording=false;
+    if(state.recSessionDist>50){
+      state.sessions.push({legId:state.selLeg,dist:Math.round(state.recSessionDist),ts:Date.now()});
+      store.set('sessions',state.sessions);
+    }
+    document.getElementById('recBtn').classList.remove('rec');
+    document.getElementById('recBtn').textContent='⏺ Record ride';
+    renderProgress();
+    toast('Saved '+fmtDist(state.recSessionDist));
+  }
+}
+function updateRecChip(){ document.getElementById('recBtn').textContent='⏹ '+fmtDist(state.recSessionDist); }
+function addLegActual(id,m){
+  state.legActual[id]=(state.legActual[id]||0)+m; store.set('legActual',state.legActual);
+}
+
+/* ---------- Nearby (Overpass) ---------- */
+const POI_ICON=(t)=>{
+  if(/castle|fort|manor|palace/.test(t))return'🏰';
+  if(/wine|vineyard|winery/.test(t))return'🍷';
+  if(/restaurant|cafe|bar|pub|food/.test(t))return'🍽';
+  if(/hotel|guest|hostel|chambres/.test(t))return'🛏';
+  if(/view|attraction/.test(t))return'👁';
+  if(/church|abbey|monastery|cathedral|chapel/.test(t))return'⛪';
+  if(/museum|gallery|artwork/.test(t))return'🖼';
+  if(/ruins|monument|memorial|archaeolog/.test(t))return'🗿';
+  if(/bakery/.test(t))return'🥖';
+  return'📍';
+};
+async function nearbyAt(center, hostList, opts={}){
+  const R=state.radius, [la,lo]=center;
+  hostList.innerHTML=`<div class="empty"><span class="spin dark"></span><div style="margin-top:8px">Searching ${(R/1000)} km around here…</div></div>`;
+  const q=`[out:json][timeout:25];(
+    node(around:${R},${la},${lo})[historic];
+    node(around:${R},${la},${lo})[tourism~"attraction|museum|viewpoint|gallery|artwork"];
+    node(around:${R},${la},${lo})[amenity~"restaurant|cafe|bar|pub|winery"];
+    node(around:${R},${la},${lo})[tourism~"hotel|guest_house|hostel"];
+    node(around:${R},${la},${lo})[shop~"wine|bakery"];
+    node(around:${R},${la},${lo})[craft="winery"];
+    way(around:${R},${la},${lo})[historic~"castle|monument|ruins|manor|fort"];
+    way(around:${R},${la},${lo})[tourism~"attraction|museum|viewpoint"];
+  );out center 80;`;
+  try{
+    const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q)});
+    if(!r.ok) throw new Error('overpass '+r.status);
+    const d=await r.json();
+    let items=(d.elements||[]).map(el=>{
+      const lat=el.lat??el.center?.lat, lon=el.lon??el.center?.lon;
+      if(lat==null) return null;
+      const tg=el.tags||{};
+      const name=tg.name||tg['name:en']||tg['name:fr'];
+      if(!name) return null;
+      const typ=(tg.historic||tg.tourism||tg.amenity||tg.craft||tg.shop||'place');
+      return {name,lat,lon,typ,d:hav(center,[lat,lon]),tags:tg};
+    }).filter(Boolean);
+    // de-dupe by name+rough loc
+    const seen=new Set(); items=items.filter(i=>{const k=i.name+Math.round(i.lat*1000)+Math.round(i.lon*1000);if(seen.has(k))return false;seen.add(k);return true;});
+    items.sort((a,b)=>a.d-b.d);
+    items=items.slice(0,40);
+    if(!items.length){ hostList.innerHTML='<div class="empty"><div class="big">🤷</div>Nothing tagged within range. Widen the radius in Trip → Settings.</div>'; return items; }
+    hostList.innerHTML=items.map((i,idx)=>`
+      <div class="poi" data-i="${idx}">
+        <div class="ic">${POI_ICON(i.typ)}</div>
+        <div style="min-width:0"><div class="nm">${i.name}</div><div class="mt">${prettyType(i.typ)}</div></div>
+        <div class="ds">${fmtDist(i.d,1)}</div>
+      </div>`).join('');
+    // markers
+    if(opts.markers!==false){
+      nearLayer.clearLayers();
+      items.forEach(i=>L.marker([i.lat,i.lon],{icon:L.divIcon({className:'',html:`<div class="pin">${POI_ICON(i.typ)}</div>`,iconSize:[22,22],iconAnchor:[11,18]})})
+        .bindPopup(`<b>${i.name}</b><br>${prettyType(i.typ)} · ${fmtDist(i.d,1)}`).addTo(nearLayer));
+    }
+    // also show on the run-through map if it's the active view
+    if(rtMap && rtPoiLayer && document.getElementById('tab-run').classList.contains('active')){
+      rtPoiLayer.clearLayers();
+      items.forEach(i=>L.marker([i.lat,i.lon],{icon:L.divIcon({className:'',html:`<div class="pin">${POI_ICON(i.typ)}</div>`,iconSize:[20,20],iconAnchor:[10,16]})})
+        .bindPopup(`<b>${i.name}</b><br>${prettyType(i.typ)} · ${fmtDist(i.d,1)}`).addTo(rtPoiLayer));
+    }
+    hostList.querySelectorAll('.poi').forEach(el=>el.onclick=()=>{
+      const i=items[+el.dataset.i]; showTab('map'); map.setView([i.lat,i.lon],15);
+      L.popup().setLatLng([i.lat,i.lon]).setContent(`<b>${i.name}</b><br>${prettyType(i.typ)}`).openOn(map);
+    });
+    return items;
+  }catch(e){
+    hostList.innerHTML='<div class="empty"><div class="big">⚠️</div>Couldn’t reach OpenStreetMap just now. Try again in a moment.</div>';
+    return [];
+  }
+}
+function prettyType(t){return t.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());}
+
+/* ---------- Nearby button (map) → bottom sheet via run tab list reuse ---------- */
+async function nearbyHere(){
+  let center;
+  if(meMarker) center=[meMarker.getLatLng().lat,meMarker.getLatLng().lng];
+  else if(designated) center=designated;
+  else { center=TRIP.legs[state.selLeg].finish.p; toast('No GPS yet — searching the leg finish'); }
+  showTab('run');
+  document.getElementById('rtPoiCard').style.display='block';
+  document.getElementById('rtGuideOut').innerHTML='';
+  await nearbyAt(center, document.getElementById('rtPoiList'));
+}
+
+/* ---------- Designated point (map click / run-through) ---------- */
+function setDesignated(latlng){
+  designated=latlng;
+  if(vMarker) map.removeLayer(vMarker);
+  vMarker=L.marker(latlng,{icon:L.divIcon({className:'',html:'<div class="vmark"></div>',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
+  toast('Point set — open Run-through for areas of interest');
+}
+
+/* ---------- Run-through animation (own map) ---------- */
+let rtRaf=null, rtPos=0;
+let rtMap=null, rtMarker=null, rtRouteLine=null, rtPoiLayer=null, rtStartEnd=null;
+function rtCoords(){
+  const leg=TRIP.legs[state.selLeg];
+  return state.routes[leg.id]|| (routeLines[leg.id]?routeLines[leg.id].getLatLngs().map(p=>[p.lat,p.lng]):null);
+}
+function initRtMap(){
+  if(rtMap) return;
+  rtMap=L.map('rtmap',{zoomControl:true,attributionControl:false}).setView(P.tours,11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(rtMap);
+  rtPoiLayer=L.layerGroup().addTo(rtMap);
+  rtStartEnd=L.layerGroup().addTo(rtMap);
+  rtMap.on('click',e=>{ setDesignated([e.latlng.lat,e.latlng.lng]); rtSetMarker([e.latlng.lat,e.latlng.lng]); });
+}
+function rtSetMarker(latlng){
+  if(!rtMap) return;
+  if(!rtMarker){
+    rtMarker=L.marker(latlng,{icon:L.divIcon({className:'',html:'<div class="me-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]}),zIndexOffset:1000}).addTo(rtMap);
+  } else rtMarker.setLatLng(latlng);
+}
+function renderRtLeg(){
+  initRtMap();
+  const leg=TRIP.legs[state.selLeg];
+  const coords=rtCoords();
+  document.getElementById('rtLegName').textContent='Leg '+leg.day+' · '+leg.title;
+  if(rtRouteLine){ rtMap.removeLayer(rtRouteLine); rtRouteLine=null; }
+  rtStartEnd.clearLayers(); rtPoiLayer.clearLayers();
+  if(coords && coords.length>1){
+    rtRouteLine=L.polyline(coords,{color:'#8E2B3B',weight:5,opacity:.95,lineCap:'round'}).addTo(rtMap);
+    // start (green) + finish (navy) flags
+    L.marker(coords[0],{icon:L.divIcon({className:'',html:'<div class="pin">🚲</div>',iconSize:[24,24],iconAnchor:[12,20]})}).bindPopup('<b>Start — '+leg.start.name+'</b>').addTo(rtStartEnd);
+    L.marker(coords[coords.length-1],{icon:L.divIcon({className:'',html:'<div class="pin">🏁</div>',iconSize:[24,24],iconAnchor:[12,20]})}).bindPopup('<b>Finish — '+leg.finish.name+'</b>').addTo(rtStartEnd);
+    leg.pois.forEach(([nm,p,ic])=>L.marker(p,{icon:L.divIcon({className:'',html:`<div class="pin">${ic}</div>`,iconSize:[22,22],iconAnchor:[11,18]})}).bindPopup('<b>'+nm+'</b>').addTo(rtStartEnd));
+    setTimeout(()=>{ rtMap.invalidateSize(); try{rtMap.fitBounds(rtRouteLine.getBounds().pad(.15));}catch(e){} },60);
+  }else{
+    setTimeout(()=>{ rtMap.invalidateSize(); rtMap.setView(leg.finish.p,12); },60);
+  }
+  rtReset();
+}
+function rtReset(){
+  if(rtRaf){cancelAnimationFrame(rtRaf);rtRaf=null;}
+  rtPos=0;
+  const sl=document.getElementById('rtSlider'); if(sl) sl.value=0;
+  const pb=document.getElementById('rtPlay'); if(pb) pb.textContent='▶ Play';
+  rtUpdate(0);
+}
+function rtUpdate(t){ // t 0..1
+  const coords=rtCoords(); if(!coords||!cumCache[state.selLeg]) {document.getElementById('rtProg').textContent='No route for this leg';return;}
+  const cum=cumCache[state.selLeg], total=cum[cum.length-1];
+  const target=t*total;
+  // find position
+  let i=1; while(i<cum.length && cum[i]<target) i++;
+  const p0=coords[i-1],p1=coords[Math.min(i,coords.length-1)];
+  const seg=(cum[i]-cum[i-1])||1, f=(target-cum[i-1])/seg;
+  const lat=p0[0]+(p1[0]-p0[0])*f, lon=p0[1]+(p1[1]-p0[1])*f;
+  setDesignated([lat,lon]);          // sync the shared point (main map + nearby/guide)
+  rtSetMarker([lat,lon]);            // move the rider on the run-through map
+  if(rtMap && t>0 && t<1) rtMap.panTo([lat,lon],{animate:true,duration:.4});
+  document.getElementById('rtProg').textContent=fmtDist(target)+' / '+fmtDist(total)+' mapped';
+}
+function rtPlayPause(){
+  const btn=document.getElementById('rtPlay');
+  if(rtRaf){ cancelAnimationFrame(rtRaf); rtRaf=null; btn.textContent='▶ Play'; return; }
+  btn.textContent='⏸ Pause';
+  const speed=+document.getElementById('rtSpeed').value;
+  const total=routeLength(state.selLeg)||1;
+  // cover the leg in ~ (40/ speed) seconds baseline
+  const dur=Math.max(8000,(total/1000)*1200)/speed;
+  let start=null;
+  const step=(ts)=>{
+    if(!start) start=ts - rtPos*dur;
+    rtPos=Math.min(1,(ts-start)/dur);
+    document.getElementById('rtSlider').value=Math.round(rtPos*1000);
+    rtUpdate(rtPos);
+    if(rtPos<1){ rtRaf=requestAnimationFrame(step); }
+    else { rtRaf=null; btn.textContent='▶ Play'; }
+  };
+  rtRaf=requestAnimationFrame(step);
+}
+
+/* ---------- Ask the guide (optional, Anthropic API) ---------- */
+async function askGuide(){
+  const out=document.getElementById('rtGuideOut');
+  if(!state.apiKey){ out.innerHTML='<div class="note">Add your Anthropic API key in Trip → Settings to use the guide.</div>'; return; }
+  if(!designated){ out.innerHTML='<div class="note">Pick a point first (scrub the run-through or tap the map).</div>'; return; }
+  // gather nearby names already listed
+  const names=[...document.querySelectorAll('#rtPoiList .nm')].slice(0,12).map(e=>e.textContent);
+  const leg=TRIP.legs[state.selLeg];
+  out.innerHTML='<div class="item"><div class="ic"><span class="spin dark"></span></div><div class="ds">Asking the guide…</div></div>';
+  const prompt=`You are a concise local cycling guide for the Loire Valley. The rider is on leg "${leg.title}" (${leg.start.name} to ${leg.finish.name}) at roughly ${designated[0].toFixed(4)}, ${designated[1].toFixed(4)}. Nearby places tagged in OpenStreetMap: ${names.join(', ')||'none found'}. In 4-5 short sentences, tell them what's worth a stop right here, any château/wine/history highlight, and one practical tip. Plain text, no markdown headers.`;
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'content-type':'application/json','x-api-key':state.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:state.model,max_tokens:400,messages:[{role:'user',content:prompt}]})
+    });
+    const d=await r.json();
+    if(d.error){ out.innerHTML='<div class="note">Guide error: '+(d.error.message||'check your key/model')+'</div>'; return; }
+    const txt=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
+    out.innerHTML=`<div class="note" style="border-left-color:var(--claret)">✨ ${txt.replace(/\n/g,'<br>')}</div>`;
+  }catch(e){ out.innerHTML='<div class="note">Couldn’t reach the API: '+e.message+'</div>'; }
+}
+
+/* ---------- Progress ---------- */
+function plannedTotalM(){
+  // use the shorter planned option per riding leg as the baseline trip distance
+  let m=0; TRIP.legs.forEach(l=>{ if(l.km.length) m+=Math.min(...l.km)*1000; }); return m;
+}
+function actualTotalM(){ return Object.values(state.legActual).reduce((a,b)=>a+b,0); }
+function renderProgress(){
+  const planned=plannedTotalM(), actual=actualTotalM();
+  const ridingLegs=TRIP.legs.filter(l=>l.km.length).length;
+  const doneLegs=TRIP.legs.filter(l=>state.legActual[l.id]).length;
+  const stats=[
+    ['Ridden', fmtDist(actual,1)],
+    ['Planned', fmtDist(planned,0)],
+    ['Legs done', doneLegs+' / '+ridingLegs],
+    ['Sessions', String(state.sessions.length)],
+    ['Tastings', '7'],
+    ['Days', '8']
+  ];
+  document.getElementById('progStats').innerHTML=stats.map(([l,v])=>`
+    <div class="stat"><div class="lab">${l}</div><div class="val">${v}</div></div>`).join('');
+  const pct = planned? Math.min(100,Math.round(100*actual/planned)) : 0;
+  document.getElementById('progBar').style.width=pct+'%';
+  document.getElementById('progPct').textContent=pct+'%';
+  document.getElementById('progSummary').textContent =
+    `You’ve ridden ${fmtDist(actual,1)} of a planned ${fmtDist(planned,0)} across ${ridingLegs} riding days.`;
+  // per-leg
+  document.getElementById('legActuals').innerHTML = TRIP.legs.filter(l=>l.km.length).map(l=>{
+    const a=state.legActual[l.id]||0, plan=Math.min(...l.km)*1000;
+    const p=plan?Math.min(100,Math.round(100*a/plan)):0;
+    return `<div class="card" style="margin-bottom:10px"><div class="bd">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600">
+        <span>Day ${l.day} · ${l.start.name} → ${l.finish.name}</span>
+        <span style="color:var(--muted)">${fmtDist(a,1)} / ${state.unit==='mi'?Math.min(...l.mi)+' mi':Math.min(...l.km)+' km'}</span>
+      </div><div class="bar" style="margin-top:8px"><i style="width:${p}%"></i></div>
+    </div></div>`;
+  }).join('');
+  // sessions
+  const sl=document.getElementById('sessionList');
+  if(!state.sessions.length){ sl.innerHTML='<div class="empty">No recorded rides yet. Tap <b>Record ride</b> on the map when you set off.</div>'; }
+  else sl.innerHTML=state.sessions.slice().reverse().map(s=>{
+    const leg=TRIP.legs[s.legId];
+    return `<div class="poi"><div class="ic">🚲</div><div><div class="nm">${fmtDist(s.dist,1)} — Day ${leg.day}</div>
+      <div class="mt">${new Date(s.ts).toLocaleString()}</div></div></div>`;
+  }).join('');
+}
+
+/* ---------- GPX import ---------- */
+function parseGPX(text){
+  const xml=new DOMParser().parseFromString(text,'application/xml');
+  const pts=[...xml.querySelectorAll('trkpt, rtept')].map(p=>[+p.getAttribute('lat'),+p.getAttribute('lon')]);
+  return pts.filter(p=>!isNaN(p[0]));
+}
+
+/* ---------- Trip info lists ---------- */
+function renderInfo(){
+  document.getElementById('hotelList').innerHTML=TRIP.hotels.map(h=>`
+    <div class="item"><div class="ic">🛏</div><div style="flex:1">
+      <div class="tt">${h.n}</div><div class="ds">${h.t} · ${h.a}${h.d?' · '+h.d:''}</div>
+      ${h.u?`<div class="ds"><a href="${h.u}" target="_blank" rel="noopener">Website ↗</a></div>`:''}
+    </div></div>`).join('');
+  const dining=[];
+  TRIP.legs.forEach(l=>l.acts.forEach(a=>{ if(a.ty==='tasting'||a.ty==='meal') dining.push({day:l.day,...a}); }));
+  document.getElementById('diningList').innerHTML=dining.map(a=>`
+    <div class="item"><div class="ic">${a.ic}</div><div style="flex:1">
+      <div class="tm">Day ${a.day}${a.tm?' · '+a.tm:''}</div>
+      <div class="tt">${a.tt}</div><div class="ds">${a.ds}</div></div></div>`).join('');
+  // gpx leg selector
+  const sel=document.getElementById('gpxLeg');
+  sel.innerHTML=TRIP.legs.filter(l=>l.type!=='arrival').map(l=>`<option value="${l.id}">Day ${l.day} — ${l.title}</option>`).join('');
+}
+
+/* ---------- Tabs ---------- */
+function showTab(name){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===name));
+  if(name==='map'){ setTimeout(()=>{map.invalidateSize();},60); }
+  if(name==='prog') renderProgress();
+  if(name==='run'){ renderRtLeg(); }
+}
+
+/* ---------- Toast ---------- */
+let toastT;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2400);
+}
+
+/* ---------- Wire up ---------- */
+function bind(){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+  document.getElementById('locBtn').onclick=startTracking;
+  document.getElementById('recBtn').onclick=toggleRecord;
+  document.getElementById('nearBtn').onclick=nearbyHere;
+  document.getElementById('fitBtn').onclick=()=>{
+    const ln=routeLines[state.selLeg];
+    if(ln){try{map.fitBounds(ln.getBounds().pad(.18))}catch(e){}}
+  };
+  document.getElementById('rtPlay').onclick=rtPlayPause;
+  document.getElementById('rtStop').onclick=rtReset;
+  document.getElementById('rtSlider').oninput=e=>{ if(rtRaf){cancelAnimationFrame(rtRaf);rtRaf=null;document.getElementById('rtPlay').textContent='▶ Play';} rtPos=+e.target.value/1000; rtUpdate(rtPos); };
+  document.getElementById('rtPoi').onclick=()=>{ if(!designated){toast('Scrub to a point first');return;} document.getElementById('rtPoiCard').style.display='block'; document.getElementById('rtGuideOut').innerHTML=''; nearbyAt(designated,document.getElementById('rtPoiList')); };
+  document.getElementById('rtGuide').onclick=askGuide;
+
+  // settings
+  const ak=document.getElementById('apiKey'); ak.value=state.apiKey; ak.onchange=()=>{state.apiKey=ak.value.trim();store.set('apiKey',state.apiKey);toast('Key saved on this device');};
+  const md=document.getElementById('model'); md.value=state.model; md.onchange=()=>{state.model=md.value;store.set('model',md.value);};
+  const rd=document.getElementById('radius'); rd.value=state.radius; rd.onchange=()=>{state.radius=+rd.value;store.set('radius',state.radius);};
+  const pf=document.getElementById('profile'); pf.value=state.profile; pf.onchange=()=>{state.profile=pf.value;store.set('profile',pf.value);state.routes={};store.set('routes',{});toast('Re-routing legs…');drawAllRoutes();};
+
+  // gpx
+  document.getElementById('gpxFile').onchange=e=>{
+    const f=e.target.files[0]; if(!f)return;
+    const id=+document.getElementById('gpxLeg').value;
+    const rdr=new FileReader();
+    rdr.onload=()=>{ const pts=parseGPX(rdr.result);
+      if(pts.length<2){toast('No track points found in that GPX');return;}
+      state.routes[id]=pts; store.set('routes',state.routes);
+      drawLegLine(TRIP.legs[id],pts);
+      if(id===state.selLeg) selectLeg(id,false);
+      toast('Imported '+pts.length+' points into Day '+TRIP.legs[id].day);
+    };
+    rdr.readAsText(f); e.target.value='';
+  };
+
+  // progress export/import/reset
+  document.getElementById('expBtn').onclick=()=>{
+    const data={legActual:state.legActual,sessions:state.sessions,exported:new Date().toISOString()};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='loire-progress.json'; a.click();
+  };
+  document.getElementById('impBtn').onclick=()=>document.getElementById('impFile').click();
+  document.getElementById('impFile').onchange=e=>{
+    const f=e.target.files[0]; if(!f)return; const rdr=new FileReader();
+    rdr.onload=()=>{ try{ const d=JSON.parse(rdr.result);
+      if(d.legActual){state.legActual=d.legActual;store.set('legActual',d.legActual);}
+      if(d.sessions){state.sessions=d.sessions;store.set('sessions',d.sessions);}
+      renderProgress();renderLegs();toast('Log imported');
+    }catch(err){toast('Bad file');} }; rdr.readAsText(f); e.target.value='';
+  };
+  document.getElementById('resetBtn').onclick=()=>{
+    if(confirm('Reset all recorded distances and sessions? This can’t be undone.')){
+      state.legActual={};state.sessions={};state.sessions=[];store.set('legActual',{});store.set('sessions',[]);
+      renderProgress();renderLegs();updateMapStat();toast('Progress reset');
+    }
+  };
+}
+
+/* ---------- PWA manifest (inline) ---------- */
+function injectManifest(){
+  const m={name:"Loire Valley Wine Tour",short_name:"Loire Ride",display:"standalone",
+    background_color:"#F7F4EC",theme_color:"#1B2A4A",start_url:".",
+    icons:[{src:"data:image/svg+xml,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192"><rect width="192" height="192" rx="36" fill="#1B2A4A"/><text x="96" y="132" font-size="110" text-anchor="middle">🍷</text></svg>'),sizes:"192x192",type:"image/svg+xml"}]};
+  const l=document.createElement('link'); l.rel='manifest';
+  l.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(m));
+  document.head.appendChild(l);
+}
+
+/* ---------- Boot ---------- */
+window.addEventListener('load',()=>{
+  injectManifest();
+  initMap();
+  renderLegs(); renderLegDetail(state.selLeg); renderInfo(); renderProgress();
+  setUnit(state.unit);
+  bind();
+});
+</script>
+</body>
+</html>
