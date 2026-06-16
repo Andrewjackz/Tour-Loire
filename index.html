@@ -453,10 +453,13 @@
       <div class="field">
         <label class="fld" for="model">Guide model</label>
         <select id="model">
-          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fast, cheap — default)</option>
-          <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-          <option value="claude-opus-4-8">Claude Opus 4.8</option>
+          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — recommended (default)</option>
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — fastest &amp; cheapest</option>
+          <option value="claude-opus-4-8">Claude Opus 4.8 — deepest reasoning</option>
+          <option value="claude-fable-5">Claude Fable 5 — newest, top tier</option>
         </select>
+        <div class="hint">Sonnet 4.6 is the sweet spot for guide narration. Fable 5 is the newest and most
+          capable but pricier — overkill for short blurbs. Haiku is cheapest at scale.</div>
       </div>
       <div class="field">
         <label class="fld" for="radius">Attraction search radius</label>
@@ -499,8 +502,8 @@
    ============================================================ */
 
 /* Build stamp — bump on every edit. */
-const APP_VERSION = '1.1.1';
-const APP_BUILD   = '2026-06-11 09:05';   // local build time
+const APP_VERSION = '1.2.0';
+const APP_BUILD   = '2026-06-15 10:40';   // local build time
 
 /* ---------- Coordinates [lat, lon] ---------- */
 const P = {
@@ -616,10 +619,18 @@ let state={
   legActual: store.get('legActual',{}),// legId -> meters
   recording:false, watchId:null, recLast:null, recSessionDist:0,
   apiKey: store.get('apiKey',''),
-  model: store.get('model','claude-haiku-4-5-20251001'),
+  model: store.get('model','claude-sonnet-4-6'),
   radius: store.get('radius',3000),
   profile: store.get('profile','trekking')
 };
+
+/* Keep the guide model on a current, valid string. */
+const VALID_MODELS=['claude-sonnet-4-6','claude-haiku-4-5-20251001','claude-opus-4-8','claude-fable-5'];
+if(!store.get('modelMigratedV2',false)){
+  if(state.model==='claude-haiku-4-5-20251001'){ state.model='claude-sonnet-4-6'; store.set('model',state.model); }
+  store.set('modelMigratedV2',true);
+}
+if(!VALID_MODELS.includes(state.model)){ state.model='claude-sonnet-4-6'; store.set('model',state.model); }
 
 /* ---------- Map ---------- */
 let map, meMarker, meAccCircle, nearLayer, routeLayer, poiLayer, vMarker, designated=null, hlLayer;
